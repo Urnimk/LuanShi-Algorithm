@@ -39,17 +39,8 @@ LuanShi-Algorithm/
 ├─ VERSION_HISTORY.md       
 │  └─ 完整歷代版本演進紀錄與版本說明索引
 │
-├─ UPDATE_GUIDE.md          
-│  └─ 開發者後續新增版本、Commit、Push、Tag 與 Release 的操作教學
-│
-├─ README.md
 │  └─ 專案首頁，說明安裝、啟動方式、檔案用途與基本操作
 │
-├─ START_HERE.md
-│  └─ 第一次把整理好的專案匯入 GitHub 時的快速操作說明
-│
-├─ MIGRATION_REPORT.md
-│  └─ 歷史版本整理與 GitHub 遷移過程的整理報告
 │
 ├─ requirements.txt
 │  └─ Python 額外套件需求，可用 pip 一次安裝
