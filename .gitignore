@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Runtime / save data
+saves/
+*.log
+*.tmp
+*.bak
+
+# Common generated state files
+rl_agents_q_tables.json
+war_live_countries.json
+war_live_alliances.json
+亂世演算_執行進度.json
+亂世演算_執行進度.txt
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test cache
+.pytest_cache/
+.coverage
+htmlcov/
