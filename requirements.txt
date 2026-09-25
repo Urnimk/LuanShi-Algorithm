@@ -1,0 +1,15 @@
+# 《亂世演算》Python 套件需求
+#
+# 安裝方式：
+#   python -m pip install -r requirements.txt
+#
+# 目前最新版 V8.7 的主要程式僅使用 Python 標準函式庫
+# （如 tkinter、json、math、random、threading 等）
+# 與專案內附的本地模組，不需額外 pip 套件。
+#
+# 以下套件是為了相容歷史版本（主要為 V1 DEMO／早期強化學習版本）：
+numpy
+
+# 注意：
+# tkinter 在 Windows 官方 Python 安裝程式中通常已隨 Python 提供，
+# 它不是一般透過 pip 安裝的套件，因此不列在 requirements.txt。
