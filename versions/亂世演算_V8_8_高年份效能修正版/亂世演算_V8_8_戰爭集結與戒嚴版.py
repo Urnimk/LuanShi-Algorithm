@@ -21,7 +21,7 @@ last_sync_time = time.time()  # 紀錄最後同步時間點（初始化為當前
 world_stage_g = 0  # RL 世界力量階段：BALANCED / RISING / EMPIRE
 world_mode_g = "平常局勢"
 world_mode_code_g = "NORMAL"
-ENGINE_VERSION = "亂世演算V8_7_戰爭集結與戒嚴版"
+ENGINE_VERSION = "亂世演算V8_9_戰爭集結與戒嚴版"
 
 # True：保留世界貨幣、市場與交易 AI；False：完整停用並改採混合資源政策成本。
 MARKET_ECONOMY_ENABLED = False
@@ -76,8 +76,8 @@ CAPITULATION_PROTECTION_YEARS = 40
 VASSAL_REPARATION_RATE = 0.12
 
 # 【戰爭集結與預警】宣戰後先集結，不在同一年瞬間交戰。
-WAR_MUSTER_YEARS_MIN = 3
-WAR_MUSTER_YEARS_MAX = 5
+WAR_MUSTER_YEARS_MIN = 10
+WAR_MUSTER_YEARS_MAX = 20
 
 # 【國家生存戒嚴】低軍備自動觸發，採進入／解除雙門檻避免反覆開關。
 MARTIAL_LAW_TRIGGER_SOLDIER_RATIO = 0.05
@@ -85,11 +85,11 @@ MARTIAL_LAW_RELEASE_SOLDIER_RATIO = 0.30
 MARTIAL_LAW_RECRUIT_MULTIPLIER = 4.0
 MARTIAL_LAW_UPKEEP_MULTIPLIER = 2.0
 
-# 【本屆後段爭冠】前五名每年取得決策機會，但仍由 Q 值選擇行動。
-LATE_SEASON_CONTENDER_COUNT = 5
+# 【本屆後段爭冠】前10名每年取得決策機會，但仍由 Q 值選擇行動。
+LATE_SEASON_CONTENDER_COUNT = 10
 
 # 【復名政變】曾被政變改國號的國家，後續政變有機會恢復原始國名。
-RESTORATION_COUP_CHANCE = 0.25
+RESTORATION_COUP_CHANCE = 0.20
 
 # ============================================================================
 # 【反霸權圍剿參數】全部以世界年／國家數為單位，集中於頂部方便調整
@@ -222,10 +222,12 @@ def _atomic_write_text(path, content):
 
 
 def _atomic_write_json(path, data, compact=True):
+    # V8_9: dumps 使用 CPython 快速編碼器，避免 dump 逐片段寫入歷史資料。
+    # 保留原 JSON 結構、每年存檔與 .bak 行為。
     temp_path = str(path) + ".tmp"
     with open(temp_path, "w", encoding="utf-8") as f:
         if compact:
-            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+            f.write(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
         else:
             json.dump(data, f, ensure_ascii=False, indent=2)
     if os.path.exists(path):

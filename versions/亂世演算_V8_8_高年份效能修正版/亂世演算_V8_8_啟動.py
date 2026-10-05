@@ -9,7 +9,7 @@ import importlib.util
 from experience_view import render_current_q
 
 try:
-    from 亂世演算_V8_7_戰爭集結與戒嚴版 import (
+    from 亂世演算_V8_8_戰爭集結與戒嚴版 import (
         thread_stat_monitor,
         toggle_simulation_paused,
         request_simulation_step,
@@ -24,7 +24,7 @@ except ModuleNotFoundError:
     # 下載同名版本可能被系統加上 (1)/(2)/(3)，啟動器自動載入同目錄最新引擎。
     pattern = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        "亂世演算_V8_7_戰爭集結與戒嚴版*.py",
+        "亂世演算_V8_9_戰爭集結與戒嚴版*.py",
     )
     candidates = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
     if not candidates:
@@ -50,7 +50,7 @@ except ModuleNotFoundError:
 # 1. 視窗與定時器設定
 # ------------------------------------------------------------------------------
 # 主視窗頂部標題列所顯示的文字名稱
-WINDOW_TITLE = "亂世演算 V8_7｜戰爭集結與戒嚴版"
+WINDOW_TITLE = "亂世演算 V8_9｜高年份效能修正版與國家歷史最高戰力"
 
 # 應用程式啟動時的預設視窗解析度 (寬度x高度，單位：像素)
 WINDOW_SIZE = "1500x900"
@@ -1166,15 +1166,16 @@ class GameInterfaceUI:
         )
 
         chronicle_specs = (
-            ("generation", "世代", 60, "center"),
-            ("name", "國名", 180, "center"),
-            ("regime_type", "政權類型", 100, "center"),
+            ("generation", "世代", 60, "w"),
+            ("name", "國名", 240, "w"),
+            ("regime_type", "政權類型", 100, "w"),
             # ("personality", "國家性格", 100, "center"),
-            ("start_year", "建立年份", 100, "center"),
-            ("end_year", "結束年份", 100, "center"),
-            ("duration", "維持", 100, "center"),
-            ("end_reason", "結束原因", 180, "center"),
-            ("peak_power", "最高戰力（年份）", 200, "center"),  # w:前置  e:後製  center:置中
+            ("start_year", "建立年份", 100, "w"),
+            ("end_year", "結束年份", 100, "w"),
+            ("duration", "維持", 100, "w"),
+            ("end_reason", "結束原因", 240, "w"),
+            # ("peak_power", "最高戰力（年份）", 200, "center"),  # w:前置  e:後製  center:置中
+            ("peak_power", "最高戰力", 100, "w"),  # w:前置  e:後製  center:置中
         )
 
         for col, title, width, anchor in chronicle_specs:
@@ -1252,6 +1253,7 @@ class GameInterfaceUI:
         self.experience_country_key = None
 
         # 「國家詳細查詢」Tab 初次進入時先顯示詳細資訊。
+        self._active_detail_page = "detail"
         self.country_detail_page.tkraise()
 
         self.setup_rich_log_tags(self.log_text)
@@ -1399,6 +1401,7 @@ class GameInterfaceUI:
 
         self.country_cb.set(country_key)
         self.on_country_selected()
+        self._active_detail_page = "detail"
         self.country_detail_page.tkraise()
         self.left_notebook.select(self.tab_detail)
         return True
@@ -2288,7 +2291,8 @@ class GameInterfaceUI:
             if peak_power > 0:
                 if peak_power_year not in (None, "") and int(peak_power_year or 0) > 0:
                     peak_power_text = (
-                        f"{peak_power:,}（{int(peak_power_year):,}年）"
+                        # f"{peak_power:,}（{int(peak_power_year):,}年）"
+                        f"{peak_power:,}"
                     )
                 else:
                     peak_power_text = f"{peak_power:,}"
@@ -2338,24 +2342,24 @@ class GameInterfaceUI:
 
         if signature != self._chronicle_signature:
             self._chronicle_signature = signature
-            for iid in self.chronicle_tree.get_children():
-                self.chronicle_tree.delete(iid)
-
-            for row in rows:
-                values = row[:-1]
-                tag = row[-1]
-                self.chronicle_tree.insert(
-                    "",
-                    "0", # 編年史更新排序
-                    values=values,
-                    tags=(tag,) if tag else (),
-                )
-
-            # 最新世代保持可見。
+            # 同國世代數不變時只更新改變的列，保留捲動與選取位置。
+            previous = getattr(self, "_chronicle_rows", ())
+            same_country = getattr(self, "_chronicle_country_key", None) == country_key
             children = self.chronicle_tree.get_children()
-            if children:
-                self.chronicle_tree.see(children[-1]) # 初始世代保持可見。
-                self.chronicle_tree.see(children[0]) # 最新世代保持可見。
+            if same_country and len(children) == len(rows) and len(previous) == len(rows):
+                for iid, old_row, row in zip(reversed(children), previous, rows):
+                    if old_row != row:
+                        self.chronicle_tree.item(iid, values=row[:-1], tags=(row[-1],) if row[-1] else ())
+            else:
+                for iid in children:
+                    self.chronicle_tree.delete(iid)
+                for row in rows:
+                    self.chronicle_tree.insert("", "0", values=row[:-1], tags=(row[-1],) if row[-1] else ())
+                children = self.chronicle_tree.get_children()
+                if children:
+                    self.chronicle_tree.see(children[0])
+            self._chronicle_rows = tuple(rows)
+            self._chronicle_country_key = country_key
 
         current_gen = int(
             c.get(
@@ -2388,6 +2392,7 @@ class GameInterfaceUI:
         self.experience_country_key = country_key
         self.refresh_country_experience()
         self.left_notebook.select(self.tab_detail)
+        self._active_detail_page = "experience"
         self.experience_page.tkraise()
 
     def refresh_country_experience(self):
@@ -2415,6 +2420,7 @@ class GameInterfaceUI:
         if self.experience_country_key in self.raw_countries_data:
             self.country_cb.set(self.experience_country_key)
             self.on_country_selected()
+        self._active_detail_page = "detail"
         self.country_detail_page.tkraise()
         self.left_notebook.select(self.tab_detail)
 
@@ -2437,6 +2443,7 @@ class GameInterfaceUI:
 
         # 同一個左側 Tab 內切換內容。
         self.left_notebook.select(self.tab_detail)
+        self._active_detail_page = "chronicle"
         self.chronicle_page.tkraise()
         self.chronicle_tree.focus_set()
 
@@ -2456,6 +2463,7 @@ class GameInterfaceUI:
             self.country_cb.set(country_key)
             self.on_country_selected()
 
+        self._active_detail_page = "detail"
         self.country_detail_page.tkraise()
         self.left_notebook.select(self.tab_detail)
 
@@ -2472,6 +2480,16 @@ class GameInterfaceUI:
         international_dread = max(0, int(c.get("international_dread", 0) or 0))
         championship_records = list(
             c.get("championship_records", []) or []
+        )
+        # 從各政權世代編年史取歷史峰值，並納入當前戰力避免落後一輪。
+        chronicle = c.get("country_chronicle", []) or []
+        historic_peak_power = max(
+            [
+                max(0, int(item.get("peak_power", 0) or 0))
+                for item in chronicle
+                if isinstance(item, dict)
+            ]
+            + [max(0, int(c.get("power", 0) or 0))]
         )
 
         current_rank = self.get_country_current_rank(selected_name)
@@ -2707,7 +2725,8 @@ class GameInterfaceUI:
 
         self.country_champion_group.configure(
             text=(
-                f" 👑 完整奪冠紀錄｜共 {len(championship_records)} 次 "
+                f" 👑 完整奪冠紀錄｜共 {len(championship_records)} 次"
+                f"｜歷史最高戰力 {historic_peak_power:,} "
             )
         )
 
@@ -2851,13 +2870,27 @@ class GameInterfaceUI:
             ))
         self._replace_tree_rows(self.market_trade_tree, trade_rows)
 
+    def _read_json_cached(self, path):
+        """原子替換檔案未變動時沿用已解析資料；讀取失敗不污染快取。"""
+        cache = getattr(self, "_json_file_cache", None)
+        if cache is None:
+            cache = self._json_file_cache = {}
+        stat = os.stat(path)
+        signature = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino)
+        entry = cache.get(path)
+        if entry is not None and entry[0] == signature:
+            return entry[1]
+        with open(path, "r", encoding="utf-8") as handle:
+            value = json.load(handle)
+        cache[path] = (signature, value)
+        return value
+
     def update_ui_data(self):
         """核心數據刷新：只在資料真的變動時重建大型表格，降低 UI 閃爍與 CPU 使用。"""
         try:
             # 1. 國家資料
             if os.path.exists(save_path("war_live_countries.json")):
-                with open(save_path("war_live_countries.json"), "r", encoding="utf-8") as f:
-                    c_json = json.load(f)
+                c_json = self._read_json_cached(save_path("war_live_countries.json"))
 
                 new_countries = c_json.get("countries", {}) or {}
                 self.raw_countries_data = new_countries
@@ -2932,8 +2965,7 @@ class GameInterfaceUI:
 
             # 2. 聯盟 / 戰爭資料
             if os.path.exists(save_path("war_live_alliances.json")):
-                with open(save_path("war_live_alliances.json"), "r", encoding="utf-8") as f:
-                    a_json = json.load(f)
+                a_json = self._read_json_cached(save_path("war_live_alliances.json"))
 
                 self.raw_alliances_data = a_json.get("alliance_details", {}) or {}
                 self.raw_active_wars = a_json.get("active_wars", {}) or {}
@@ -3043,7 +3075,9 @@ class GameInterfaceUI:
                 self.on_alliance_selected()
 
             current_chronicle = self.chronicle_country_cb.get().strip()
-            if current_chronicle:
+            if (current_chronicle
+                    and self.left_notebook.select() == str(self.tab_detail)
+                    and getattr(self, "_active_detail_page", "detail") == "chronicle"):
                 self.on_chronicle_country_selected()
 
         except (json.JSONDecodeError, OSError) as e:
