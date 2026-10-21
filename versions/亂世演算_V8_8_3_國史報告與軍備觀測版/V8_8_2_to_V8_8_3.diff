@@ -1,0 +1,215 @@
+--- 亂世演算_V8_8_2_聯盟信心與革命情誼版.py
++++ 亂世演算_V8_8_3_國史報告與軍備觀測版.py
+@@ -10,6 +10,7 @@
+ import shutil
+ import csv
+ import alliance_confidence as confidence
++import country_history as historian
+ from collections import deque  # 從 collections 匯入雙端隊列 deque，用於維護固定長度的 Log 訊息緩衝區
+ from decision_analysis import NationalDecisionHub
+ from strategy_states import strategic_state_256, readable_q_text
+@@ -22,7 +23,7 @@
+ world_stage_g = 0  # RL 世界力量階段：BALANCED / RISING / EMPIRE
+ world_mode_g = "平常局勢"
+ world_mode_code_g = "NORMAL"
+-ENGINE_VERSION = "亂世演算_V8_8_2_聯盟信心與革命情誼版"
++ENGINE_VERSION = "亂世演算_V8_8_3_國史報告與軍備觀測版"
+ 
+ # True：保留世界貨幣、市場與交易 AI；False：完整停用並改採混合資源政策成本。
+ MARKET_ECONOMY_ENABLED = False
+@@ -5504,6 +5505,7 @@
+         + soldiers * BALANCE["SOLDIER_FOOD_UPKEEP"]
+     ) * upkeep_mult
+     food_turns = food / max(1.0, estimated_consumption)
++    historian.event(historian.economy_key or c_name, "糧食檢查", food_turns=food_turns)
+     is_famine_warning = food_turns < BALANCE["FAMINE_WARNING_TURNS"]
+ 
+     industry_focus = str(data.get("industry_focus", "AUTO") or "AUTO")
+@@ -10058,15 +10060,20 @@
+         _disable_market_runtime(world_market)
+     if old_index_schema < 4 and loaded_season_elapsed > 0:
+         print(f"📊 [價格指數修正] 現在使用累計發行／最初發行作整屆倍率；當屆指數 {world_bank['policy_price_index']:.3f}。")
++    historian.configure(save_path("country_history"))
++    historian.begin(countries)
++    historian.annual(countries, turn_counter, "INITIAL", max(0, YEARS_PER_SEASON-(turn_counter-season_start_turn)))
+     # 主遊戲運行迴圈 (Game Loop)
+     while True:
+         _wait_for_simulation_permission()
+         loop_started_at = time.monotonic()
++        historian.begin(countries)
+         _war_index_rebuild(active_wars)
+         _RECENT_ATTACKER_SET_CACHE.clear()
+         world_bank["current_season_round"] = int(count_round)
+         season_elapsed_years = max(0, int(turn_counter) - int(season_start_turn))
+         season_remaining_years = max(0, YEARS_PER_SEASON - season_elapsed_years)
++        history_remaining = max(0, season_remaining_years-1)
+         season_progress = _clamp(season_elapsed_years / max(1.0, float(YEARS_PER_SEASON)), 0.0, 1.0)
+         season_phase = "EARLY" if season_progress < 1/3 else "MIDDLE" if season_progress < 2/3 else "LATE"
+         season_phase_name = {"EARLY": "本屆前段", "MIDDLE": "本屆中段", "LATE": "本屆後段"}[season_phase]
+@@ -10146,9 +10153,14 @@
+                 # 保存上一輪戰力，讓 State 的 RISING/STABLE/FALLING 真正有時間差。
+                 c_data["prev_power"] = c_data.get("power", 0)
+ 
++                history_economy_before = historian.snapshot(c_data)
+                 econ_pop_before = int(c_data.get("pop_total", 0) or 0)
++                historian.economy_key = name
+                 update_rts_economy_and_jobs(c_data, world_market)
++                historian.economy_key = None
+                 econ_pop_after = int(c_data.get("pop_total", 0) or 0)
++                historian.event(name, "經濟與徵退兵", before=history_economy_before,
++                                after=historian.snapshot(c_data))
+ 
+                 if econ_pop_after < econ_pop_before:
+                     econ_loss = econ_pop_before - econ_pop_after
+@@ -10824,6 +10836,13 @@
+                 # ----------------------------------------------------
+                 
+ 
++                historian.event(attacker_key, "行動選擇", action=int(action),
++                                label=RL_ACTIONS.get(action, str(action)),
++                                strategic_action=agent._last_strategic_action,
++                                valid_actions=list(valid_actions),
++                                before=historian.snapshot(c_data),phase=season_phase,
++                                remaining=max(0, YEARS_PER_SEASON-(turn_counter-season_start_turn)),
++                                rank=alive_sorted.index(attacker_key)+1)
+                 if action == 0:
+                     # 平常戰爭仍使用普通聯盟；若本國正在參加反霸權聯軍，
+                     # 且本次決定執行共同討伐，則只動員聯軍成員，不拖普通盟友下水。
+@@ -12794,6 +12813,11 @@
+                 # Action 11: 裁軍休養
+                 # ----------------------------------------------------
+                 elif action == 11:
++                    history_demob_before = historian.snapshot(c_data)
++                    history_demob_runway = float(c_data.get("food",0))/max(1.0,
++                        (c_data.get("farmers",0)*BALANCE["FARMER_FOOD_UPKEEP"]+
++                         c_data.get("soldiers",0)*BALANCE["SOLDIER_FOOD_UPKEEP"]) *
++                         (MARTIAL_LAW_UPKEEP_MULTIPLIER if c_data.get("martial_law_active") else 1.0))
+                     c_data["military_target_ratio"] = float(
+                         _clamp(c_data.get("military_target_ratio", 0.30) - 0.10, 0.12, 0.50)
+                     )
+@@ -12812,6 +12836,11 @@
+                         c_data["metal"] += int(demobilize * 0.5)
+                         action_success = True
+                         action_value += demobilize * 5
++                        historian.event(attacker_key, "裁軍執行", before=history_demob_before,
++                                        target_after=c_data["military_target_ratio"],demobilized=demobilize,
++                                        phase=season_phase,rank=alive_sorted.index(attacker_key)+1,
++                                        remaining=max(0,YEARS_PER_SEASON-(turn_counter-season_start_turn)),
++                                        runway=history_demob_runway)
+                         print(
+                             f"[裁軍休養] 【{c_data['display_name']}】讓 {demobilize} 名士兵退伍轉回農業生產。"
+                         )
+@@ -14013,9 +14042,11 @@
+                     f"⚠️ [進度紀錄警告] {progress_error}"
+                 )
+ 
++        historian.annual(countries, turn_counter, season_phase, history_remaining)
+         # 本輪所有 LOG 統一落盤；Full GC 改為每 30 輪一次。
+         flush_game_log(force=True)
+         if max_turns and turn_counter >= max_turns:
++            historian.flush(close=True)
+             print(f"🧪 [測試模式] 已完成指定的 {max_turns} 輪，正常停止。")
+             flush_game_log(force=True)
+             break
+--- 亂世演算_V8_8_2_聯盟信心與革命情誼版_啟動.py
++++ 亂世演算_V8_8_3_國史報告與軍備觀測版_啟動.py
+@@ -2,15 +2,16 @@
+ import json
+ import re
+ import tkinter as tk
+-from tkinter import ttk, scrolledtext, messagebox
++from tkinter import ttk, scrolledtext, messagebox, filedialog
+ import threading
+ import glob
+ import importlib.util
+ from experience_view import render_current_q
+ from alliance_confidence import tenure_text
++import country_history as historian
+ 
+ try:
+-    from 亂世演算_V8_8_2_聯盟信心與革命情誼版 import (
++    from 亂世演算_V8_8_3_國史報告與軍備觀測版 import (
+         thread_stat_monitor,
+         toggle_simulation_paused,
+         request_simulation_step,
+@@ -25,12 +26,12 @@
+     # 下載同名版本可能被系統加上 (1)/(2)/(3)，啟動器自動載入同目錄最新引擎。
+     pattern = os.path.join(
+         os.path.dirname(os.path.abspath(__file__)),
+-        "亂世演算_V8_8_2_聯盟信心與革命情誼版*.py",
++        "亂世演算_V8_8_3_國史報告與軍備觀測版*.py",
+     )
+     candidates = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
+     if not candidates:
+         raise
+-    spec = importlib.util.spec_from_file_location("亂世演算_v8_8_2_engine", candidates[0])
++    spec = importlib.util.spec_from_file_location("亂世演算_v8_8_3_engine", candidates[0])
+     engine = importlib.util.module_from_spec(spec)
+     spec.loader.exec_module(engine)
+     thread_stat_monitor = engine.thread_stat_monitor
+@@ -51,7 +52,7 @@
+ # 1. 視窗與定時器設定
+ # ------------------------------------------------------------------------------
+ # 主視窗頂部標題列所顯示的文字名稱
+-WINDOW_TITLE = "亂世演算_V8_8_2_聯盟信心與革命情誼版"
++WINDOW_TITLE = "亂世演算_V8_8_3_國史報告與軍備觀測版"
+ 
+ # 應用程式啟動時的預設視窗解析度 (寬度x高度，單位：像素)
+ WINDOW_SIZE = "1500x900"
+@@ -408,6 +409,11 @@
+         self.country_experience_button.grid(
+             row=0, column=1, sticky="ne", padx=(4, 4), pady=(72, 0),
+         )
++
++        self.country_history_button = ttk.Button(
++            self.country_basic_group, text="📖 上代國史", width=9,
++            command=self.open_selected_country_history)
++        self.country_history_button.grid(row=0,column=1,sticky="ne",padx=(4,4),pady=(109,0))
+ 
+         # 右上：人口、建築與資源
+         self.country_econ_group = tk.LabelFrame(
+@@ -1895,6 +1901,44 @@
+                 target_widget.yview_moveto(old_y)
+             except Exception:
+                 pass
++
++    def open_selected_country_history(self):
++        key = self.resolve_country_key(self.country_cb.get())
++        if not key or key not in self.raw_countries_data:
++            messagebox.showinfo("國史報告", "請先選擇國家。", parent=self.root)
++            return
++        c = self.raw_countries_data[key]
++        groups = historian.periods(c)
++        if not groups:
++            messagebox.showinfo("國史報告", "尚無可用的編年史。", parent=self.root)
++            return
++        win = tk.Toplevel(self.root)
++        win.title(f"{key}｜客觀國史報告")
++        win.geometry("1000x760")
++        top = ttk.Frame(win);top.pack(fill="x",padx=8,pady=8)
++        ttk.Label(top,text="國家存續段（滅國才分段；政變與繼承合併）：").pack(side="left")
++        labels=[]
++        for i,g in enumerate(groups):
++            end=g[-1].get("end_year")
++            extinct="滅國" in str(g[-1].get("end_reason","")) or "滅亡" in str(g[-1].get("end_reason",""))
++            labels.append(f"第{i+1}輪｜{g[0].get('start_year','?')}～{end if extinct else '延續中'}年｜{g[0].get('name',key)}")
++        choice=ttk.Combobox(top,values=labels,state="readonly",width=48)
++        choice.pack(side="left",fill="x",expand=True)
++        # Default to the most recent extinct incarnation, never a mere succession.
++        closed=[i for i,g in enumerate(groups) if "滅國" in str(g[-1].get("end_reason","")) or "滅亡" in str(g[-1].get("end_reason",""))]
++        choice.current(closed[-1] if closed else len(groups)-1)
++        text=scrolledtext.ScrolledText(win,wrap="word",font=("Microsoft JhengHei",11))
++        text.pack(fill="both",expand=True,padx=8,pady=(0,8))
++        def refresh(event=None):
++            report=historian.render_report(key,c,save_path("country_history"),groups[choice.current()])
++            text.configure(state="normal");text.delete("1.0","end");text.insert("1.0",report);text.configure(state="disabled")
++        choice.bind("<<ComboboxSelected>>",refresh)
++        def export():
++            path=filedialog.asksaveasfilename(parent=win,title="匯出國史報告",defaultextension=".txt",initialfile=f"{key}_國史報告.txt",filetypes=[("文字報告","*.txt")])
++            if path:
++                with open(path,"w",encoding="utf-8") as f:f.write(text.get("1.0","end-1c"))
++        ttk.Button(top,text="匯出報告",command=export).pack(side="right",padx=4)
++        refresh()
+ 
+     def on_alliance_summary_double_click(self, event=None):
+         item = self.alliance_summary_tree.focus()

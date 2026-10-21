@@ -9,6 +9,7 @@ import gc  # 匯入垃圾回收模組 (Garbage Collection)，用於定期清理�
 import uuid
 import shutil
 import csv
+import alliance_confidence as confidence
 from collections import deque  # 從 collections 匯入雙端隊列 deque，用於維護固定長度的 Log 訊息緩衝區
 from decision_analysis import NationalDecisionHub
 from strategy_states import strategic_state_256, readable_q_text
@@ -21,7 +22,7 @@ last_sync_time = time.time()  # 紀錄最後同步時間點（初始化為當前
 world_stage_g = 0  # RL 世界力量階段：BALANCED / RISING / EMPIRE
 world_mode_g = "平常局勢"
 world_mode_code_g = "NORMAL"
-ENGINE_VERSION = "亂世演算_V8_8_1_決策與UI效能修正版"
+ENGINE_VERSION = "亂世演算_V8_8_2_聯盟信心與革命情誼版"
 
 # True：保留世界貨幣、市場與交易 AI；False：完整停用並改採混合資源政策成本。
 MARKET_ECONOMY_ENABLED = False
@@ -1692,6 +1693,7 @@ def _alliance_resource_aid(donor_key, countries, alliances):
 
     if not transfers:
         return None
+    confidence.record_aid(donor, target, transfers, int(donor.get("current_turn",0)))
     return {"target": target_key, "transfers": transfers}
 
 
@@ -1764,6 +1766,7 @@ def _alliance_execute_layer_action(country_key, action, countries, alliances, ma
                 data["food"] -= extra
                 countries[result["target"]]["food"] += extra
                 result["transfers"]["food"] = result["transfers"].get("food", 0) + extra
+                confidence.record_aid(data, countries[result["target"]], {"food":extra}, turn_counter)
                 multiplier = 1.35
         amount = sum(float(v or 0) for v in result["transfers"].values())
         target = countries[result["target"]]
@@ -3764,6 +3767,7 @@ def _alliance_defensive_support_vote(
             donor[res] = stock - amount
             receiver[res] = max(0, int(receiver.get(res, 0) or 0)) + amount
             economic_aid[res] += amount
+            confidence.record_aid(donor, receiver, {res:amount}, turn_counter)
 
     print(
         f"🛡️ [共同防禦表態] {alliance_name}｜"
@@ -4465,9 +4469,31 @@ def _leave_alliance(country_key, countries, alliances, reason="政局變動"):
     ally_name = get_country_alliance(country_key, alliances)
     if not ally_name or ally_name not in alliances:
         return False
+    c = countries[country_key]
+    cs = c.get("alliance_confidence", {}) or {}
+    year = max(int(c.get("current_turn", 0) or 0), int(cs.get("current_year", 0)), int(cs.get("review_year", 0)))
+    allowed = confidence.betrayal_allowed(c, year) if reason == "背叛背刺" else (
+        confidence.exit_allowed(c, year) and year >= int(cs.get("notice", {}).get("due", year + 1)))
+    if not allowed:
+        print(f"🤝 [退盟評估]【{c.get('display_name',country_key)}】{ally_name}：{reason}；"
+              f"信心 {cs.get('confidence',60):.1f}，未達持續低信心與替代利益條件，維持盟約。")
+        return False
+    if reason == "背叛背刺":
+        for m in alliances[ally_name]:
+            if m != country_key and m in countries:
+                confidence.record_event(countries[m], year, "革命情誼遭盟友背叛", -35, -35,
+                                        betrayer=country_key)
+                confidence.sync(countries[m],year)["breaches"] += 1
+    confidence.journal(save_path("alliance_confidence_history.jsonl"), dict(
+        year=year, country=country_key, alliance=ally_name, decision=reason,
+        confidence=cs.get("confidence",60), reason=cs.get("last_reason","尚待觀察")))
+    cs["cooldown_until"] = year + confidence.COOLDOWN_YEARS
     members = [m for m in alliances[ally_name] if m != country_key]
     countries[country_key]["current_alliance"] = ""
     countries[country_key]["alliance_last_result"] = f"因{reason}退出 {ally_name}"
+    if len(members) < 2:
+        confidence.journal(save_path("alliance_confidence_history.jsonl"), dict(
+            year=year,alliance=ally_name,decision="成員退出後不足兩國，聯盟自然解散",survivors=members))
     if len(members) >= 2:
         alliances[ally_name] = members
     else:
@@ -5184,7 +5210,8 @@ def _trigger_dynamic_event(
                 countries[member].get("political_stability", 75) < 35 or random.random() < 0.28
             )
             if leave:
-                _leave_alliance(member, countries, alliances, reason="聯盟成員爭執")
+                confidence.record_event(countries[member], turn_counter, "聯盟成員爭執", -8, -3)
+            if leave and _leave_alliance(member, countries, alliances, reason="聯盟成員爭執"):
                 print(f"💢 [聯盟爭執] {ally_name} 爆發內鬥，【{countries[member]['display_name']}】選擇退盟。")
             else:
                 for m in members:
@@ -6338,6 +6365,7 @@ def get_valid_rl_actions(attacker_key, countries, alliances, anti_hegemon_coalit
     # 1 結盟：尚未加入任何同盟，且世界上仍有可結盟對象。
     if (
         not current_alliance
+        and turn_counter >= int((c.get("alliance_confidence") or {}).get("cooldown_until",0))
         and not (REBUILD_PROTECTION_BLOCK_ALLIANCE and _is_rebuild_protected(c, turn_counter))
         and any(
         k != attacker_key
@@ -6363,26 +6391,7 @@ def get_valid_rl_actions(attacker_key, countries, alliances, anti_hegemon_coalit
             m for m in alliances[current_alliance]
             if m != attacker_key and countries[m].get("is_alive", True)
         ]
-        alliance_tenure = max(
-            0,
-            int(c.get("current_turn", 0) or 0)
-            - int(c.get("alliance_join_turn", 0) or 0),
-        )
-        max_partner_hostility = max(
-            [float((c.get("hostility", {}) or {}).get(m, 0) or 0) for m in partners]
-            or [0.0]
-        )
-        dominant_partner = any(
-            float(countries[m].get("power", 0) or 0)
-            > max(1.0, float(c.get("power", 0) or 0)) * 2.20
-            for m in partners
-        )
-        betrayal_crisis = (
-            max_partner_hostility >= 55
-            or float(c.get("political_stability", 75) or 75) < 30
-            or dominant_partner
-        )
-        if partners and alliance_tenure >= 20 and betrayal_crisis:
+        if partners and confidence.betrayal_allowed(c, turn_counter):
             valid.add(4)
 
     # 5 防線：需要真實支付材料，而非憑空增加資源。
@@ -9333,7 +9342,14 @@ def resolve_persistent_war_round(
             if random.random() < 0.70:
                 return {"ended": True, "winner": "DEFENDER", "reason": "進攻方攻勢耗盡撤軍"}
 
-        if def_ratio <= 0.40 and avg_fort < 30:
+        confidence_anchor = war.get("defender_anchor")
+        confidence_defiant = confidence_anchor in def_members and confidence.stand_together(countries[confidence_anchor])
+        if def_ratio <= 0.40 and avg_fort < 30 and confidence_defiant:
+            if turn_counter - int(war.get("confidence_defiance_year", -10000)) >= 10:
+                war["confidence_defiance_year"] = turn_counter
+                print(f"🛡️ [共存亡]【{countries[confidence_anchor].get('display_name',confidence_anchor)}】"
+                      f"利益認同、信任與革命情誼均高，拒絕求和並繼續並肩作戰；仍依正常戰敗規則結算。")
+        if def_ratio <= 0.40 and avg_fort < 30 and not confidence_defiant:
             # 防守方正式提出求和；進攻方自己判斷是否值得接受。
             accept_surrender, decision_reason = _war_decide_surrender(
                 war, att_members, def_members, countries
@@ -9511,6 +9527,7 @@ def thread_stat_monitor():
     alliance_last_war_votes = {}
     alliance_join_vote_cooldowns = {}
     alliance_last_join_votes = {}
+    alliance_confidence_meta = {}
 
     turn_counter = 0
     count_round = 1
@@ -9709,6 +9726,7 @@ def thread_stat_monitor():
                     "alliance_last_war_votes",
                     {},
                 ) or {}
+                alliance_confidence_meta = saved_alliances_data.get("alliance_confidence_meta", {}) or {}
                 alliance_join_vote_cooldowns = saved_alliances_data.get(
                     "alliance_join_vote_cooldowns",
                     {},
@@ -10224,6 +10242,8 @@ def thread_stat_monitor():
                 if settled:
                     countries[country_key]["last_delayed_reward"] = round(sum(v for _a, v in settled), 2)
         turn_counter += 1
+        for _c in countries.values():
+            confidence.sync(_c, turn_counter)["current_year"] = turn_counter
 
         # V3 動態事件：每輪全世界最多一件，避免事件洗版。
         event_result = _trigger_dynamic_event(
@@ -10361,52 +10381,7 @@ def thread_stat_monitor():
 
             # 舊版「戰力門檻 + 2%」稀有抽籤已移除，改由國際忌憚值候選池觸發。
 
-        # 3. 普通聯盟瓦解與分裂檢測機制（反霸權聯軍不在 alliances，因此不受此規則影響）
-        alliances_to_remove = []
-        alive_count_for_alliance = max(1, len(alive_sorted))
-        # 小世界不能套用固定 12%：存活國越少，單國自然占比越高。
-        member_disband_threshold, alliance_disband_threshold = (
-            _alliance_disband_thresholds(alive_count_for_alliance)
-        )
-        for ally_name, members in list(alliances.items()):
-            alive_m = [m for m in members if countries[m]["is_alive"]]
-            ally_power = sum(countries[m]["power"] for m in alive_m)
-
-            for m in alive_m:
-                pwr = countries[m]["power"]
-                is_overpowered = (
-                    total_world_power > 0
-                    and (pwr / total_world_power) >= member_disband_threshold
-                )
-
-                if is_overpowered:
-                    print(
-                        f"[霸權瓦解] 【{countries[m]['display_name']}】戰力佔比達 {pwr/total_world_power:.1%}，"
-                        f"超過動態門檻 {member_disband_threshold:.1%}！【{ally_name}】自動瓦解！"
-                    )
-                    alliances_to_remove.append(ally_name)
-                    break
-
-            # 普通同盟整體過強時仍可能內鬥；臨時反霸權聯軍不走這個資料結構。
-            if ally_name not in alliances_to_remove:
-                if (
-                    total_world_power > 0
-                    and (ally_power / total_world_power) >= alliance_disband_threshold
-                ):
-                    print(f"[聯盟分裂] 【{ally_name}】 勢力過大引發內鬥解散！")
-                    alliances_to_remove.append(ally_name)
-
-        # 執行刪除過大同盟
-        for ally_n in set(alliances_to_remove):
-            if ally_n in alliances:
-                for member in alliances[ally_n]:
-                    if member in countries:
-                        countries[member]["alliance_dissolutions"] = max(
-                            0, int(countries[member].get("alliance_dissolutions", 0) or 0)
-                        ) + 1
-                        countries[member]["alliance_last_result"] = f"{ally_n} 瓦解"
-                del alliances[ally_n]
-
+        # 聯盟強大本身不是分裂理由；主動離盟統一由個體信心、利益與告知期決定。
         # 政權滅亡即視為舊盟約失效：死亡國家先移出名單。
         # 新世代重生後必須重新外交，不會自動回到前朝聯盟。
         cleaned_alliances = {}
@@ -10418,12 +10393,26 @@ def thread_stat_monitor():
             live_members = list(dict.fromkeys(live_members))
             if len(live_members) >= 2:
                 cleaned_alliances[ally_name] = live_members
+            else:
+                reason = "存活盟員不足兩國，盟約自然解散（非主動退盟）"
+                print(f"📜 [聯盟解散] 第{turn_counter}年 {ally_name}：{reason}。")
+                confidence.journal(save_path("alliance_confidence_history.jsonl"),dict(
+                    year=turn_counter,alliance=ally_name,decision=reason,members=members,
+                    survivors=live_members))
+                for member in live_members:
+                    countries[member]["alliance_last_result"] = reason
+                alliance_confidence_meta.setdefault(ally_name, {}).update(ended_turn=turn_counter,end_reason=reason)
         alliances = cleaned_alliances
 
         # 更新各國普通聯盟與臨時聯軍狀態。兩者可以同時存在。
         for k in countries:
             countries[k]["current_alliance"] = get_country_alliance(k, alliances)
             countries[k]["current_coalition"] = get_country_coalition(k, anti_hegemon_coalitions)
+
+        confidence.sync_metadata(countries, alliances, alliance_confidence_meta, turn_counter)
+        confidence.review(countries, alliances, active_wars, alliance_confidence_meta,
+                          turn_counter, _leave_alliance, log=print,
+                          audit_path=save_path("alliance_confidence_history.jsonl"))
 
         # 4. 觸發全球隨機事件
         event_name, event_type, event_msg = trigger_global_event()
@@ -10489,6 +10478,14 @@ def thread_stat_monitor():
                 _war_index_remove(active_wars, war_id)
                 continue
 
+            confidence_before = {
+                side: dict(war.get(side + "_troop_contribution", {}) or {})
+                for side in ("attacker", "defender")
+            }
+            for side in ("attacker", "defender"):
+                confidence_before[side + "_power"] = sum(
+                    max(0, countries.get(k, {}).get("soldiers",0))
+                    for k in war.get(side + "_members", []))
             result = resolve_persistent_war_round(
                 war_id,
                 war,
@@ -10497,6 +10494,7 @@ def thread_stat_monitor():
                 turn_counter,
                 note_population_loss,
             )
+            confidence.record_battle(countries, war, turn_counter, result, confidence_before)
             # Resolver may remove dead participants; sync this war before later queries this turn.
             if war_id in active_wars:
                 _war_index_add(active_wars, war_id, active_wars[war_id])
@@ -11192,6 +11190,7 @@ def thread_stat_monitor():
                             alliance_last_war_votes[
                                 defending_alliance
                             ] = defensive_vote
+                            confidence.record_refusal(countries, defender_key, defensive_vote, turn_counter)
 
                             def_entity = dict(def_entity)
                             def_entity["members"] = list(
@@ -12116,6 +12115,7 @@ def thread_stat_monitor():
                 elif action == 1:
                     if (
                         not c_data["current_alliance"]
+                        and turn_counter >= int((c_data.get("alliance_confidence") or {}).get("cooldown_until",0))
                         and not (
                             REBUILD_PROTECTION_BLOCK_ALLIANCE
                             and _is_rebuild_protected(c_data, turn_counter)
@@ -12223,6 +12223,7 @@ def thread_stat_monitor():
                             unallied = [
                                 k for k in alive_sorted
                                 if not countries[k]["current_alliance"] and k != attacker_key and countries[k]["is_alive"]
+                                and turn_counter >= int((countries[k].get("alliance_confidence") or {}).get("cooldown_until",0))
                                 and not (
                                     REBUILD_PROTECTION_BLOCK_ALLIANCE
                                     and _is_rebuild_protected(countries[k], turn_counter)
@@ -12289,6 +12290,7 @@ def thread_stat_monitor():
                                 if random.random() < alliance_success_rate:  # 判定是否成功結盟
                                     ally_name = generate_awesome_alliance_name()
                                     alliances[ally_name] = [attacker_key, partner]
+                                    confidence.register_alliance(alliance_confidence_meta, ally_name, turn_counter)
                                     c_data["current_alliance"] = ally_name
                                     countries[partner]["current_alliance"] = ally_name
                                     c_data["alliance_successes"] = max(
@@ -12468,8 +12470,9 @@ def thread_stat_monitor():
                     curr_a = c_data["current_alliance"]
                     if curr_a and curr_a in alliances:
                         partners = [m for m in alliances[curr_a] if m != attacker_key and countries[m]["is_alive"]]
-                        if partners:
-                            victim = random.choice(partners)  # 隨機選擇一名盟友背刺
+                        if (partners and confidence.betrayal_allowed(c_data, turn_counter)
+                                and _leave_alliance(attacker_key, countries, alliances, reason="背叛背刺")):
+                            victim = max(partners, key=lambda k: float((c_data.get("hostility") or {}).get(k,0)))
                             steal_food = int(countries[victim]["food"] * 0.10)  # 偷取 10%
                             countries[victim]["food"] -= steal_food
                             c_data["food"] += steal_food
@@ -12480,15 +12483,10 @@ def thread_stat_monitor():
                                 WARSTATE["HOSTILITY_BETRAY"],
                             )
 
-                            _leave_alliance(
-                                attacker_key,
-                                countries,
-                                alliances,
-                                reason="背叛背刺",
-                            )
                             c_data["infamy"] = c_data.get("infamy", 0) + 50
                             action_success = True
                             action_value += steal_food
+                            print(f"[背叛依據] {c_data.get('alliance_confidence',{}).get('last_reason','')}；信任決裂後選擇敵意最高盟友。")
                             print(f"[背叛背刺] 【{c_data['display_name']}】撕毀條約！偷襲盟友【{countries[victim]['display_name']}】掠奪{steal_food}糧草！")
 
                 # ----------------------------------------------------
@@ -13193,6 +13191,8 @@ def thread_stat_monitor():
                         data["last_reward"] = 0.0
                         data["ai_status"] = ""
                         data["current_alliance"] = ""
+                        data.pop("alliance_confidence", None)
+                        data.pop("alliance_join_turn", None)
                         data["current_coalition"] = ""
                         data["last_population_audit"] = "新世代重生，人口重新起算"
                         data["hostility"] = {}
@@ -13612,6 +13612,10 @@ def thread_stat_monitor():
             print(f"⚠️ [排行榜存檔警告] {e}")
 
         # 10. 整理與序列化寫入 JSON 存檔
+        confidence.sync_metadata(countries, alliances, alliance_confidence_meta, turn_counter)
+        confidence_powers = {n:sum(countries[m].get("power",0) for m in ms if countries[m].get("is_alive",True)) for n,ms in alliances.items()}
+        confidence_order = sorted(confidence_powers, key=lambda n:(-confidence_powers[n],n))
+        confidence_ranks = {n:i+1 for i,n in enumerate(confidence_order)}
         alliance_details = {}
         for ally_name, members in alliances.items():
             alive_m = [m for m in members if countries[m]["is_alive"]]
@@ -13623,6 +13627,10 @@ def thread_stat_monitor():
                 "members": members,
                 "target_hegemon": None,
                 "is_coalition": False,
+                "confidence_summary": confidence.summary_fields(
+                    ally_name, alliance_confidence_meta[ally_name], turn_counter,
+                    confidence_ranks[ally_name], len(confidence_ranks)),
+                "created_turn": alliance_confidence_meta[ally_name].get("created_turn"),
                 "last_war_vote": alliance_last_war_votes.get(
                     ally_name,
                     {},
@@ -13781,6 +13789,7 @@ def thread_stat_monitor():
                     "count_round": count_round,
                     "total_world_power": total_world_power,
                     "alliance_details": alliance_details,
+                    "alliance_confidence_meta": alliance_confidence_meta,
                     "anti_hegemon_coalitions": anti_hegemon_coalitions,
                     "anti_hegemon_targets": {
                         name: info.get("target")

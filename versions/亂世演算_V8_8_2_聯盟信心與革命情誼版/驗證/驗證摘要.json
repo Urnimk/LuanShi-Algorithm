@@ -1,0 +1,68 @@
+{
+  "base": "使用者上傳 V8_8_1 RAR，未採用 V9 程式",
+  "unit_tests": 19,
+  "unit_result": "PASS",
+  "source_modules_unchanged": {
+    "policy_index.py": true,
+    "亂世演算_國家大腦繼承工具.py": true,
+    "fiscal_policy.py": true,
+    "decision_analysis.py": true,
+    "strategy_states.py": true,
+    "experience_view.py": true
+  },
+  "simulations": [
+    {
+      "seed": 882,
+      "start_year": 0,
+      "end_year": 1000,
+      "countries": 100,
+      "elapsed_seconds": 53.989,
+      "crash": false
+    },
+    {
+      "seed": 883,
+      "start_year": 0,
+      "end_year": 500,
+      "countries": 100,
+      "elapsed_seconds": 27.942,
+      "crash": false
+    },
+    {
+      "seed": 881,
+      "source_version": "V8_8_1 產生的存檔",
+      "start_year": 100,
+      "end_year": 200,
+      "elapsed_seconds": 4.231,
+      "crash": false
+    },
+    {
+      "seed": 882,
+      "start_year": 1000,
+      "end_year": 1100,
+      "elapsed_seconds": 5.065,
+      "crash": false
+    },
+    {
+      "seed": 884,
+      "start_year": 0,
+      "end_year": 100,
+      "countries": 100,
+      "elapsed_seconds": 4.601,
+      "crash": false,
+      "final_smoke_test": true
+    },
+    {
+      "seed": 881,
+      "start_year": 200,
+      "end_year": 210,
+      "elapsed_seconds": 0.448,
+      "crash": false,
+      "final_smoke_test": true
+    }
+  ],
+  "naturally_observed_peaceful_exits": 0,
+  "old_peak_records_preserved": 100,
+  "native_tk_gui_test": "未執行，無 DISPLAY / Xvfb；已驗證 UI method with widget substitutes",
+  "timing_note": "耗時為本環境實測，非與舊版公平單獨 profile；兩組長期測試同時執行，不作效能提升宣稱",
+  "revisions_note": "長跑後僅再修正舊檔成立年下限、解散原因紀錄、拒援違約分類及最終100年煙霧測試；共存亡求和分支修正後另續跑100年。"
+}

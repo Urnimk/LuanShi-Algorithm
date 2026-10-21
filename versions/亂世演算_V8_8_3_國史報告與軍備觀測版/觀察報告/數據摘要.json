@@ -1,0 +1,30 @@
+{
+  "睡意襲來": {
+    "observed_rows": 996,
+    "demobilizations": 15,
+    "late_top10_demobilizations": 0,
+    "target_declines": 14,
+    "ratio_dilution_years": 97
+  },
+  "核心熔毀": {
+    "observed_rows": 1001,
+    "demobilizations": 2,
+    "late_top10_demobilizations": 0,
+    "target_declines": 2,
+    "ratio_dilution_years": 19
+  },
+  "終焉之刃": {
+    "observed_rows": 996,
+    "demobilizations": 9,
+    "late_top10_demobilizations": 0,
+    "target_declines": 8,
+    "ratio_dilution_years": 56
+  },
+  "挫蛋先鋒": {
+    "observed_rows": 991,
+    "demobilizations": 2,
+    "late_top10_demobilizations": 0,
+    "target_declines": 4,
+    "ratio_dilution_years": 212
+  }
+}

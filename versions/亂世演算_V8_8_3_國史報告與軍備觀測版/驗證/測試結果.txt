@@ -1,0 +1,35 @@
+test_abandonment_breaks_bond_and_is_causal (test_confidence.ConfidenceTests.test_abandonment_breaks_bond_and_is_causal) ... ok
+test_actual_battle_evidence_and_no_credit_from_ballot (test_confidence.ConfidenceTests.test_actual_battle_evidence_and_no_credit_from_ballot) ... ok
+test_aid_observation_does_not_move_resources (test_confidence.ConfidenceTests.test_aid_observation_does_not_move_resources) ... ok
+test_archive_records_all_changes (test_confidence.ConfidenceTests.test_archive_records_all_changes) ... ok
+test_continued_loss_can_overcome_old_bond (test_confidence.ConfidenceTests.test_continued_loss_can_overcome_old_bond) ... ok
+test_engine_guards_all_leave_callers_and_action_mask (test_confidence.ConfidenceTests.test_engine_guards_all_leave_callers_and_action_mask) ... ok
+test_extreme_pact_is_not_just_age_and_can_break (test_confidence.ConfidenceTests.test_extreme_pact_is_not_just_age_and_can_break) ... ok
+test_gui_summary_and_member_rows_without_display (test_confidence.ConfidenceTests.test_gui_summary_and_member_rows_without_display) ... ok
+test_individual_interests_and_roles (test_confidence.ConfidenceTests.test_individual_interests_and_roles) ... ok
+test_inertia_and_revolutionary_bond_cushion (test_confidence.ConfidenceTests.test_inertia_and_revolutionary_bond_cushion) ... ok
+test_no_bond_from_tenure_alone (test_confidence.ConfidenceTests.test_no_bond_from_tenure_alone) ... ok
+test_old_join_dates_and_year_zero (test_confidence.ConfidenceTests.test_old_join_dates_and_year_zero) ... ok
+test_peaceful_exit_has_persistence_notice_and_no_theft (test_confidence.ConfidenceTests.test_peaceful_exit_has_persistence_notice_and_no_theft) ... ok
+test_recovery_cancels_notice (test_confidence.ConfidenceTests.test_recovery_cancels_notice) ... ok
+test_review_is_idempotent_and_does_not_draw_randomness (test_confidence.ConfidenceTests.test_review_is_idempotent_and_does_not_draw_randomness) ... ok
+test_save_reload_decision_continuity (test_confidence.ConfidenceTests.test_save_reload_decision_continuity) ... ok
+test_strong_protector_is_not_a_betrayal_reason (test_confidence.ConfidenceTests.test_strong_protector_is_not_a_betrayal_reason) ... ok
+test_sustained_wartime_growth_beats_war_frequency (test_confidence.ConfidenceTests.test_sustained_wartime_growth_beats_war_frequency) ... ok
+test_war_defers_exit_but_survival_crisis_can_end_delay (test_confidence.ConfidenceTests.test_war_defers_exit_but_survival_crisis_can_end_delay) ... ok
+test_cap_baseline_plus_1000_years_and_extinction_endpoint (test_history.HistoryTests.test_cap_baseline_plus_1000_years_and_extinction_endpoint) ... ok
+test_decline_needs_consecutive_observed_years (test_history.HistoryTests.test_decline_needs_consecutive_observed_years) ... ok
+test_interrupted_tail_is_preserved_and_append_recovers (test_history.HistoryTests.test_interrupted_tail_is_preserved_and_append_recovers) ... ok
+test_lifetimes_do_not_end_at_succession_or_coup (test_history.HistoryTests.test_lifetimes_do_not_end_at_succession_or_coup) ... ok
+test_no_fabricated_decline_from_old_peak (test_history.HistoryTests.test_no_fabricated_decline_from_old_peak) ... ok
+test_observation_keeps_population_dilution_separate (test_history.HistoryTests.test_observation_keeps_population_dilution_separate) ... ok
+test_real_decision_metadata_and_no_game_state_mutation (test_history.HistoryTests.test_real_decision_metadata_and_no_game_state_mutation) ... ok
+test_rollback_preserves_old_future_separately (test_history.HistoryTests.test_rollback_preserves_old_future_separately) ... ok
+test_same_year_reload_does_not_duplicate (test_history.HistoryTests.test_same_year_reload_does_not_duplicate) ... ok
+test_sudden_terminal_collapse_is_not_hidden_by_ten_year_rule (test_history.HistoryTests.test_sudden_terminal_collapse_is_not_hidden_by_ten_year_rule) ... ok
+test_top_three_phase_alias_is_reproducible (test_history.HistoryTests.test_top_three_phase_alias_is_reproducible) ... ok
+
+----------------------------------------------------------------------
+Ran 30 tests in 0.119s
+
+OK

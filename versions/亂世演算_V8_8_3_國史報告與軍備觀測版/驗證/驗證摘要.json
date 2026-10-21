@@ -1,0 +1,32 @@
+{
+  "unit_tests": 30,
+  "syntax": "PASS",
+  "observation": {
+    "source": "saves(5).rar",
+    "start": 144999,
+    "end": 145999,
+    "elapsed_years": 1000,
+    "seconds": 91.251,
+    "snapshot_write_interval": 25,
+    "annual_observations": true
+  },
+  "equivalence": {
+    "start": 144999,
+    "end": 145000,
+    "countries_equal": true,
+    "q_tables_equal": true,
+    "rng_equal": true,
+    "all_ai_classes_unchanged": true
+  },
+  "gui_native_test": "未執行，無原生顯示器",
+  "completed_country_lifetime": {
+    "key": "挫蛋先鋒",
+    "name": "挫蛋皇權國IV",
+    "start": 145174,
+    "end": 145467,
+    "years": 294,
+    "peak": 48250,
+    "peak_year": 145459,
+    "terminal_decline_year": 145464
+  }
+}

@@ -1,0 +1,24 @@
+test_abandonment_breaks_bond_and_is_causal (__main__.ConfidenceTests.test_abandonment_breaks_bond_and_is_causal) ... ok
+test_actual_battle_evidence_and_no_credit_from_ballot (__main__.ConfidenceTests.test_actual_battle_evidence_and_no_credit_from_ballot) ... ok
+test_aid_observation_does_not_move_resources (__main__.ConfidenceTests.test_aid_observation_does_not_move_resources) ... ok
+test_archive_records_all_changes (__main__.ConfidenceTests.test_archive_records_all_changes) ... ok
+test_continued_loss_can_overcome_old_bond (__main__.ConfidenceTests.test_continued_loss_can_overcome_old_bond) ... ok
+test_engine_guards_all_leave_callers_and_action_mask (__main__.ConfidenceTests.test_engine_guards_all_leave_callers_and_action_mask) ... ok
+test_extreme_pact_is_not_just_age_and_can_break (__main__.ConfidenceTests.test_extreme_pact_is_not_just_age_and_can_break) ... ok
+test_gui_summary_and_member_rows_without_display (__main__.ConfidenceTests.test_gui_summary_and_member_rows_without_display) ... ok
+test_individual_interests_and_roles (__main__.ConfidenceTests.test_individual_interests_and_roles) ... ok
+test_inertia_and_revolutionary_bond_cushion (__main__.ConfidenceTests.test_inertia_and_revolutionary_bond_cushion) ... ok
+test_no_bond_from_tenure_alone (__main__.ConfidenceTests.test_no_bond_from_tenure_alone) ... ok
+test_old_join_dates_and_year_zero (__main__.ConfidenceTests.test_old_join_dates_and_year_zero) ... ok
+test_peaceful_exit_has_persistence_notice_and_no_theft (__main__.ConfidenceTests.test_peaceful_exit_has_persistence_notice_and_no_theft) ... ok
+test_recovery_cancels_notice (__main__.ConfidenceTests.test_recovery_cancels_notice) ... ok
+test_review_is_idempotent_and_does_not_draw_randomness (__main__.ConfidenceTests.test_review_is_idempotent_and_does_not_draw_randomness) ... ok
+test_save_reload_decision_continuity (__main__.ConfidenceTests.test_save_reload_decision_continuity) ... ok
+test_strong_protector_is_not_a_betrayal_reason (__main__.ConfidenceTests.test_strong_protector_is_not_a_betrayal_reason) ... ok
+test_sustained_wartime_growth_beats_war_frequency (__main__.ConfidenceTests.test_sustained_wartime_growth_beats_war_frequency) ... ok
+test_war_defers_exit_but_survival_crisis_can_end_delay (__main__.ConfidenceTests.test_war_defers_exit_but_survival_crisis_can_end_delay) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 0.048s
+
+OK

@@ -2,14 +2,15 @@ import os
 import json
 import re
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import ttk, scrolledtext, messagebox
 import threading
 import glob
 import importlib.util
 from experience_view import render_current_q
+from alliance_confidence import tenure_text
 
 try:
-    from 亂世演算_V8_8_1_決策與UI效能修正版 import (
+    from 亂世演算_V8_8_2_聯盟信心與革命情誼版 import (
         thread_stat_monitor,
         toggle_simulation_paused,
         request_simulation_step,
@@ -24,12 +25,12 @@ except ModuleNotFoundError:
     # 下載同名版本可能被系統加上 (1)/(2)/(3)，啟動器自動載入同目錄最新引擎。
     pattern = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        "亂世演算_V8_8_1_決策與UI效能修正版*.py",
+        "亂世演算_V8_8_2_聯盟信心與革命情誼版*.py",
     )
     candidates = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
     if not candidates:
         raise
-    spec = importlib.util.spec_from_file_location("亂世演算_v8_8_1_engine", candidates[0])
+    spec = importlib.util.spec_from_file_location("亂世演算_v8_8_2_engine", candidates[0])
     engine = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(engine)
     thread_stat_monitor = engine.thread_stat_monitor
@@ -50,7 +51,7 @@ except ModuleNotFoundError:
 # 1. 視窗與定時器設定
 # ------------------------------------------------------------------------------
 # 主視窗頂部標題列所顯示的文字名稱
-WINDOW_TITLE = "亂世演算_V8_8_1_決策與UI效能修正版"
+WINDOW_TITLE = "亂世演算_V8_8_2_聯盟信心與革命情誼版"
 
 # 應用程式啟動時的預設視窗解析度 (寬度x高度，單位：像素)
 WINDOW_SIZE = "1500x900"
@@ -757,20 +758,22 @@ class GameInterfaceUI:
         self.alliance_member_tree = ttk.Treeview(
             self.alliance_member_container,
             # columns=("name", "rank", "power", "pop", "soldiers", "status"),
-            columns=("name", "rank", "power", "pop", "gold", "status"),        
+            columns=("name", "rank", "power", "pop", "gold", "status", "tenure", "confidence"),        
             show="headings",
             height=6,
         )
 
         # 數值欄固定；只有「國家」欄吸收剩餘空間，右側不留白。
         for col, title, width, anchor in (
-            ("name",     "國家",  240, "w"),
-            ("rank",     "排名",  100, "center"),
-            ("power",    "戰力",  155, "center"),
-            ("pop",      "人口",  145, "center"),
+            ("name",     "國家",  180, "w"),
+            ("rank",     "排名",  75, "center"),
+            ("power",    "戰力",  115, "center"),
+            ("pop",      "人口",  105, "center"),
             # ("soldiers", "士兵",  145, "center"),
-            ("gold", "士兵",  145, "center"),
-            ("status",   "狀態",  120, "center"),
+            ("gold", "士兵",  90, "center"),
+            ("status",   "狀態",  85, "center"),
+            ("tenure", "入盟年資", 120, "center"),
+            ("confidence", "聯盟信心", 95, "center"),
         ):
             self.alliance_member_tree.heading(col, text=title)
             self.alliance_member_tree.column(
@@ -790,12 +793,19 @@ class GameInterfaceUI:
             yscrollcommand=self.alliance_member_scroll.set
         )
 
+        self.alliance_member_hscroll = ttk.Scrollbar(
+            self.alliance_member_container, orient="horizontal",
+            command=self.alliance_member_tree.xview)
+        self.alliance_member_tree.configure(xscrollcommand=self.alliance_member_hscroll.set)
+        self.alliance_member_hscroll.pack(side="bottom", fill="x")
         self.alliance_member_tree.pack(
             side="left", fill="both", expand=True
         )
         self.alliance_member_scroll.pack(
             side="right", fill="y"
         )
+
+        self.alliance_summary_tree.bind("<Double-Button-1>", self.on_alliance_summary_double_click)
 
         self.alliance_member_tree.bind(
             "<Double-Button-1>",
@@ -1886,6 +1896,12 @@ class GameInterfaceUI:
             except Exception:
                 pass
 
+    def on_alliance_summary_double_click(self, event=None):
+        item = self.alliance_summary_tree.focus()
+        values = self.alliance_summary_tree.item(item, "values") if item else ()
+        if len(values) >= 2:
+            messagebox.showinfo(str(values[0]), str(values[1]), parent=self.root)
+
     def on_alliance_selected(self, event=None):
         selected_name = self.ally_cb.get()
         if not selected_name or selected_name not in self.raw_alliances_data:
@@ -1895,6 +1911,7 @@ class GameInterfaceUI:
         self._last_alliance_log_owner = selected_name
 
         a = self.raw_alliances_data[selected_name]
+        year = int(self.raw_turn_counter)
         members = a.get("members", []) or []
         target = a.get("target_hegemon", "無") or "無"
         is_coalition = bool(a.get("is_coalition", False))
@@ -1932,6 +1949,17 @@ class GameInterfaceUI:
                 else "🟢 和平",
             ),
         ]
+        confidence_summary = a.get("confidence_summary", {}) or {}
+        if is_coalition:
+            created = a.get("created_turn")
+            age_text = f"{max(0,year-int(created)):,} 年" if created is not None else "舊檔未記錄"
+            peers = [(n,d) for n,d in self.raw_alliances_data.items() if d.get("is_coalition")]
+            peers.sort(key=lambda p:(-p[1].get("total_power",0),p[0]))
+            ranking = next((i+1 for i,(n,d) in enumerate(peers) if n==selected_name),0)
+            summary_rows += [("聯盟存在年數",age_text),("聯盟排名",f"第 {ranking} / {len(peers)} 名（臨時聯軍）")]
+        else:
+            summary_rows += [("聯盟存在年數",confidence_summary.get("age_text","舊檔未記錄")),
+                             ("聯盟排名",confidence_summary.get("ranking_text","尚待更新"))]
         if is_coalition:
             summary_rows.append(("討伐目標", target))
         else:
@@ -1999,8 +2027,6 @@ class GameInterfaceUI:
                     )
                 )
 
-        self._replace_tree_rows(self.alliance_summary_tree, summary_rows)
-
         # ----- 聯盟成員明細 -----
         rank_map = self._build_rank_map()
         member_rows = []
@@ -2010,7 +2036,7 @@ class GameInterfaceUI:
             key = self.resolve_country_key(member)
             if not key or key not in self.raw_countries_data:
                 member_data.append(
-                    (member, 999999999, ("未知", "-", "-", "-", "-", "未知"))
+                    (member, 999999999, ("未知", "-", "-", "-", "-", "未知", "—", "—"))
                 )
                 continue
 
@@ -2030,6 +2056,19 @@ class GameInterfaceUI:
                     else ("戰中" if c.get("current_wars") else "存活"),
                 ),
             )
+            cs = c.get("alliance_confidence", {}) or {}
+            if is_coalition:
+                member_tenure = (f"{max(0,year-int(a['created_turn'])):,} 年（聯軍）"
+                                 if a.get("created_turn") is not None else "舊檔未記錄")
+                score = "—"
+            else:
+                member_tenure = tenure_text(c, year, selected_name)
+                score = f"{float(cs.get('confidence',60)):.1f}" if cs else "觀察中"
+                summary_rows += [
+                    (f"{display_name}｜信心", f"{score}｜{cs.get('role','觀察中')}｜利益 {cs.get('benefit',60):.1f}／信任 {cs.get('trust',55):.1f}／革命情誼 {cs.get('bond_display',0):.1f}"),
+                    (f"{display_name}｜原因", cs.get('last_reason','開始觀察')),
+                    (f"{display_name}｜決策", cs.get('last_decision','維持盟約'))]
+            row = row + (member_tenure, score)
             member_data.append((display_name, c.get("power", 0), row))
 
         member_data.sort(key=lambda x: x[1], reverse=True)
@@ -2041,12 +2080,14 @@ class GameInterfaceUI:
         ]
 
         if not member_rows:
-            member_rows = [("無成員", "-", "-", "-", "-", "-")]
+            member_rows = [("無成員", "-", "-", "-", "-", "-", "—", "—")]
 
         self._replace_tree_rows(
             self.alliance_member_tree,
             member_rows,
         )
+
+        self._replace_tree_rows(self.alliance_summary_tree, summary_rows)
 
         # ----- 聯盟當前戰爭 -----
         war_rows = []
