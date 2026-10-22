@@ -10,7 +10,8 @@ import uuid
 import shutil
 import csv
 import alliance_confidence as confidence
-import country_history as historian
+import alliance_honors as honors
+import chronicle_retention as retention
 from collections import deque  # 從 collections 匯入雙端隊列 deque，用於維護固定長度的 Log 訊息緩衝區
 from decision_analysis import NationalDecisionHub
 from strategy_states import strategic_state_256, readable_q_text
@@ -23,7 +24,7 @@ last_sync_time = time.time()  # 紀錄最後同步時間點（初始化為當前
 world_stage_g = 0  # RL 世界力量階段：BALANCED / RISING / EMPIRE
 world_mode_g = "平常局勢"
 world_mode_code_g = "NORMAL"
-ENGINE_VERSION = "亂世演算_V8_8_3_國史報告與軍備觀測版"
+ENGINE_VERSION = "亂世演算_V8_8_4_精簡編年史與聯盟榮譽版"
 
 # True：保留世界貨幣、市場與交易 AI；False：完整停用並改採混合資源政策成本。
 MARKET_ECONOMY_ENABLED = False
@@ -2422,6 +2423,7 @@ def _chronicle_start_current(country_key, data, turn_counter):
         _world_year(turn_counter),
     )
     history.append(entry)
+    retention.trim(data)
     return entry
 
 
@@ -2688,6 +2690,7 @@ def _ensure_country_chronicle(country_key, data, turn_counter=0):
     if data.get("is_alive", True) and _chronicle_active_entry(data) is None:
         _chronicle_start_current(country_key, data, turn_counter)
 
+    retention.trim(data)
     return data["country_chronicle"]
 
 
@@ -5505,7 +5508,6 @@ def update_rts_economy_and_jobs(data, market=None):
         + soldiers * BALANCE["SOLDIER_FOOD_UPKEEP"]
     ) * upkeep_mult
     food_turns = food / max(1.0, estimated_consumption)
-    historian.event(historian.economy_key or c_name, "糧食檢查", food_turns=food_turns)
     is_famine_warning = food_turns < BALANCE["FAMINE_WARNING_TURNS"]
 
     industry_focus = str(data.get("industry_focus", "AUTO") or "AUTO")
@@ -10060,20 +10062,20 @@ def thread_stat_monitor():
         _disable_market_runtime(world_market)
     if old_index_schema < 4 and loaded_season_elapsed > 0:
         print(f"📊 [價格指數修正] 現在使用累計發行／最初發行作整屆倍率；當屆指數 {world_bank['policy_price_index']:.3f}。")
-    historian.configure(save_path("country_history"))
-    historian.begin(countries)
-    historian.annual(countries, turn_counter, "INITIAL", max(0, YEARS_PER_SEASON-(turn_counter-season_start_turn)))
+    # Remove only the retired report's dedicated data directory.
+    retention.remove_report_data(SAVES_DIR)
+    confidence.sync_metadata(countries, alliances, alliance_confidence_meta, turn_counter)
+    honors.synchronize(countries, alliances, alliance_confidence_meta, anti_hegemon_coalitions,
+                       turn_counter, count_round, season_start_turn, YEARS_PER_SEASON)
     # 主遊戲運行迴圈 (Game Loop)
     while True:
         _wait_for_simulation_permission()
         loop_started_at = time.monotonic()
-        historian.begin(countries)
         _war_index_rebuild(active_wars)
         _RECENT_ATTACKER_SET_CACHE.clear()
         world_bank["current_season_round"] = int(count_round)
         season_elapsed_years = max(0, int(turn_counter) - int(season_start_turn))
         season_remaining_years = max(0, YEARS_PER_SEASON - season_elapsed_years)
-        history_remaining = max(0, season_remaining_years-1)
         season_progress = _clamp(season_elapsed_years / max(1.0, float(YEARS_PER_SEASON)), 0.0, 1.0)
         season_phase = "EARLY" if season_progress < 1/3 else "MIDDLE" if season_progress < 2/3 else "LATE"
         season_phase_name = {"EARLY": "本屆前段", "MIDDLE": "本屆中段", "LATE": "本屆後段"}[season_phase]
@@ -10153,14 +10155,9 @@ def thread_stat_monitor():
                 # 保存上一輪戰力，讓 State 的 RISING/STABLE/FALLING 真正有時間差。
                 c_data["prev_power"] = c_data.get("power", 0)
 
-                history_economy_before = historian.snapshot(c_data)
                 econ_pop_before = int(c_data.get("pop_total", 0) or 0)
-                historian.economy_key = name
                 update_rts_economy_and_jobs(c_data, world_market)
-                historian.economy_key = None
                 econ_pop_after = int(c_data.get("pop_total", 0) or 0)
-                historian.event(name, "經濟與徵退兵", before=history_economy_before,
-                                after=historian.snapshot(c_data))
 
                 if econ_pop_after < econ_pop_before:
                     econ_loss = econ_pop_before - econ_pop_after
@@ -10836,13 +10833,6 @@ def thread_stat_monitor():
                 # ----------------------------------------------------
                 
 
-                historian.event(attacker_key, "行動選擇", action=int(action),
-                                label=RL_ACTIONS.get(action, str(action)),
-                                strategic_action=agent._last_strategic_action,
-                                valid_actions=list(valid_actions),
-                                before=historian.snapshot(c_data),phase=season_phase,
-                                remaining=max(0, YEARS_PER_SEASON-(turn_counter-season_start_turn)),
-                                rank=alive_sorted.index(attacker_key)+1)
                 if action == 0:
                     # 平常戰爭仍使用普通聯盟；若本國正在參加反霸權聯軍，
                     # 且本次決定執行共同討伐，則只動員聯軍成員，不拖普通盟友下水。
@@ -12813,11 +12803,6 @@ def thread_stat_monitor():
                 # Action 11: 裁軍休養
                 # ----------------------------------------------------
                 elif action == 11:
-                    history_demob_before = historian.snapshot(c_data)
-                    history_demob_runway = float(c_data.get("food",0))/max(1.0,
-                        (c_data.get("farmers",0)*BALANCE["FARMER_FOOD_UPKEEP"]+
-                         c_data.get("soldiers",0)*BALANCE["SOLDIER_FOOD_UPKEEP"]) *
-                         (MARTIAL_LAW_UPKEEP_MULTIPLIER if c_data.get("martial_law_active") else 1.0))
                     c_data["military_target_ratio"] = float(
                         _clamp(c_data.get("military_target_ratio", 0.30) - 0.10, 0.12, 0.50)
                     )
@@ -12836,11 +12821,6 @@ def thread_stat_monitor():
                         c_data["metal"] += int(demobilize * 0.5)
                         action_success = True
                         action_value += demobilize * 5
-                        historian.event(attacker_key, "裁軍執行", before=history_demob_before,
-                                        target_after=c_data["military_target_ratio"],demobilized=demobilize,
-                                        phase=season_phase,rank=alive_sorted.index(attacker_key)+1,
-                                        remaining=max(0,YEARS_PER_SEASON-(turn_counter-season_start_turn)),
-                                        runway=history_demob_runway)
                         print(
                             f"[裁軍休養] 【{c_data['display_name']}】讓 {demobilize} 名士兵退伍轉回農業生產。"
                         )
@@ -13640,8 +13620,125 @@ def thread_stat_monitor():
         except Exception as e:
             print(f"⚠️ [排行榜存檔警告] {e}")
 
+        # 屆期結算（先結算、再保存冠軍與聯盟榮譽） (達到 time_total 時間即進行本屆冠軍結算與新一屆重置)
+        if (int(turn_counter) - int(season_start_turn)) >= YEARS_PER_SEASON:
+            if sorted_countries:
+                champion_key, champion_data = sorted_countries[0]
+                champion_power = champion_data["power"]
+
+                # 屆末終局獎勵：冠軍遠高於亞軍、季軍與其他名次。
+                # 所有國家都收到排名結果，讓「爭取當屆第一」成為共同最終目標。
+                season_size = max(1, len(sorted_countries))
+                for finish_rank, (country_key, data) in enumerate(sorted_countries, 1):
+                    if finish_rank == 1:
+                        season_q_reward = SEASON_CHAMPION_Q_REWARD
+                    elif finish_rank == 2:
+                        season_q_reward = SEASON_RUNNER_UP_Q_REWARD
+                    elif finish_rank == 3:
+                        season_q_reward = SEASON_THIRD_Q_REWARD
+                    elif finish_rank <= 10:
+                        season_q_reward = 0.80 - (finish_rank - 4) * 0.10
+                    elif finish_rank <= 25:
+                        season_q_reward = 0.10
+                    else:
+                        percentile = (finish_rank - 25) / max(1, season_size - 25)
+                        season_q_reward = -0.15 - 0.70 * percentile
+                    if not data.get("is_alive", True):
+                        season_q_reward = min(season_q_reward, -1.50)
+                    agent = rl_agents.get(country_key)
+                    credited = bool(
+                        agent and agent.apply_competition_reward(season_q_reward)
+                    )
+                    data["last_season_finish_rank"] = finish_rank
+                    data["last_season_q_reward"] = round(season_q_reward, 3)
+                    data["last_season_reward_credited"] = credited
+
+                if not isinstance(champion_data.get("championship_records"), list):
+                    champion_data["championship_records"] = []
+
+                honors.record_champion(champion_key, countries, alliances, alliance_confidence_meta,
+                                       anti_hegemon_coalitions, turn_counter, count_round,
+                                       season_start_turn, YEARS_PER_SEASON)
+                # 紀錄冠軍歷史
+                champion_data["championship_records"].append(
+                    f"R{count_round}__{champion_power}__{champion_data['display_name']}"
+                )
+                physical_rewards = _award_season_champion_rewards(
+                    champion_key, countries, alliances, world_bank, turn_counter
+                )
+                alliance_reward_text = "、".join(
+                    f"{countries[m].get('display_name', m)}:{amount}"
+                    for m, amount in physical_rewards.get("members", [])
+                ) or "無"
+                print(
+                    f"💰 [冠軍實體獎勵] 冠軍【{champion_data['display_name']}】獲 {physical_rewards['champion']} 大洋；"
+                    f"聯盟成員獎勵合計 {physical_rewards['alliance_pool']}（{alliance_reward_text}）。"
+                )
+                print(f"🏆 [第 {count_round} 屆結算] 恭喜【{champion_data['display_name']}】以 {champion_power} 戰力獲勝！")
+                print(
+                    f"🧠 [爭冠學習] 冠軍 Q 獎勵 +{SEASON_CHAMPION_Q_REWARD:.1f}；"
+                    f"亞軍 +{SEASON_RUNNER_UP_Q_REWARD:.1f}；"
+                    f"季軍 +{SEASON_THIRD_Q_REWARD:.1f}，其餘依名次递減。"
+                )
+                # 終局獎勵屬於重要學習結果，不等下一個定期存檔點。
+                save_all_agents(rl_agents, file_path=q_tables_file)
+
+            # 本屆正式完成；累積時間只計本屆規定秒數，
+            # 避免 Game Loop 排程延遲造成額外秒數灌入下一屆。
+            old_policy_index = float(world_bank.get("policy_price_index", 1.0) or 1.0)
+            new_policy_index = (policy_index_settle_season(
+                world_bank, countries, world_market, MARKET_RESOURCE_META, count_round, turn_counter
+            ) if MARKET_ECONOMY_ENABLED else old_policy_index)
+            world_bank["currency_rename_trigger_rate"] = WORLD_BANK_ISSUE_TRIGGER_RATE
+            changed_resource = (settle_currency_name(
+                world_bank, world_market, MARKET_RESOURCE_META,
+                WORLD_CURRENCY_NAME_OPTIONS, count_round, turn_counter
+            ) if MARKET_ECONOMY_ENABLED else None)
+            if changed_resource:
+                _redenominate_currency(world_bank, countries, world_market, factor=10)
+                print(f"💱 [貨幣重定面額] {MARKET_RESOURCE_META[changed_resource]['name']}降至預設價 10% 或以下；"
+                      f"幣名改為 {world_bank['currency']}，國家餘額、銀行帳本及市場報價均乘 10，無新發購買。")
+            if abs(new_policy_index - old_policy_index) > 1e-8:
+                print(f"📊 [政策價格指數] 第 {count_round} 屆：{old_policy_index:.4f} → {new_policy_index:.4f}；"
+                      f"下屆生育費 {policy_cost(BIRTH_POLICY_GOLD_COST, world_bank):,} {world_bank['currency']}。")
+            completed_runtime_seconds += float(time_total)
+            count_round += 1  # 進入下一屆
+            season_start_turn = int(turn_counter)
+
+            # 重置戰術狀態
+            for name, c_data in countries.items():
+                c_data["recent_attackers"] = []
+                c_data["infamy"] = 0
+            start_time = time.time()  # 新一屆從 0 秒開始
+
+            # 結算後立即留下人類可讀的進度提示。
+            # 完整世界狀態仍會在下一個 Game Loop 正常寫入。
+            try:
+                _atomic_write_text(
+                    runtime_progress_text_file,
+                    (
+                        f"亂世演算｜執行進度\n"
+                        f"第 {count_round} 屆\n"
+                        f"本屆已執行：0.0 / "
+                        f"{float(time_total):.0f} 秒\n"
+                        f"本屆剩餘：約 {float(time_total):.1f} 秒\n"
+                        f"已完成歷屆秒數："
+                        f"{float(completed_runtime_seconds):.1f} 秒\n"
+                        f"累積模擬時間："
+                        f"{float(completed_runtime_seconds):.1f} 秒\n"
+                        f"Turn：{turn_counter}\n"
+                    ),
+                )
+            except Exception as progress_error:
+                print(
+                    f"⚠️ [進度紀錄警告] {progress_error}"
+                )
+
+
         # 10. 整理與序列化寫入 JSON 存檔
         confidence.sync_metadata(countries, alliances, alliance_confidence_meta, turn_counter)
+        honors.synchronize(countries, alliances, alliance_confidence_meta, anti_hegemon_coalitions,
+                           turn_counter, count_round, season_start_turn, YEARS_PER_SEASON)
         confidence_powers = {n:sum(countries[m].get("power",0) for m in ms if countries[m].get("is_alive",True)) for n,ms in alliances.items()}
         confidence_order = sorted(confidence_powers, key=lambda n:(-confidence_powers[n],n))
         confidence_ranks = {n:i+1 for i,n in enumerate(confidence_order)}
@@ -13660,6 +13757,8 @@ def thread_stat_monitor():
                     ally_name, alliance_confidence_meta[ally_name], turn_counter,
                     confidence_ranks[ally_name], len(confidence_ranks)),
                 "created_turn": alliance_confidence_meta[ally_name].get("created_turn"),
+                **honors.snapshot(ally_name, members, countries, alliance_confidence_meta[ally_name],
+                                  "alliance", turn_counter),
                 "last_war_vote": alliance_last_war_votes.get(
                     ally_name,
                     {},
@@ -13685,6 +13784,7 @@ def thread_stat_monitor():
                 "is_coalition": True,
                 "created_turn": info.get("created_turn"),
                 "expires_turn": info.get("expires_turn"),
+                **honors.snapshot(coalition_name, members, countries, info, "coalition", turn_counter),
             }
 
         try:
@@ -13931,122 +14031,9 @@ def thread_stat_monitor():
         except Exception as e:
             print(f"⚠️ [世界存檔警告] {e}")
 
-        # 11. 屆期結算檢查 (達到 time_total 時間即進行本屆冠軍結算與新一屆重置)
-        if (int(turn_counter) - int(season_start_turn)) >= YEARS_PER_SEASON:
-            if sorted_countries:
-                champion_key, champion_data = sorted_countries[0]
-                champion_power = champion_data["power"]
-
-                # 屆末終局獎勵：冠軍遠高於亞軍、季軍與其他名次。
-                # 所有國家都收到排名結果，讓「爭取當屆第一」成為共同最終目標。
-                season_size = max(1, len(sorted_countries))
-                for finish_rank, (country_key, data) in enumerate(sorted_countries, 1):
-                    if finish_rank == 1:
-                        season_q_reward = SEASON_CHAMPION_Q_REWARD
-                    elif finish_rank == 2:
-                        season_q_reward = SEASON_RUNNER_UP_Q_REWARD
-                    elif finish_rank == 3:
-                        season_q_reward = SEASON_THIRD_Q_REWARD
-                    elif finish_rank <= 10:
-                        season_q_reward = 0.80 - (finish_rank - 4) * 0.10
-                    elif finish_rank <= 25:
-                        season_q_reward = 0.10
-                    else:
-                        percentile = (finish_rank - 25) / max(1, season_size - 25)
-                        season_q_reward = -0.15 - 0.70 * percentile
-                    if not data.get("is_alive", True):
-                        season_q_reward = min(season_q_reward, -1.50)
-                    agent = rl_agents.get(country_key)
-                    credited = bool(
-                        agent and agent.apply_competition_reward(season_q_reward)
-                    )
-                    data["last_season_finish_rank"] = finish_rank
-                    data["last_season_q_reward"] = round(season_q_reward, 3)
-                    data["last_season_reward_credited"] = credited
-
-                if not isinstance(champion_data.get("championship_records"), list):
-                    champion_data["championship_records"] = []
-
-                # 紀錄冠軍歷史
-                champion_data["championship_records"].append(
-                    f"R{count_round}__{champion_power}__{champion_data['display_name']}"
-                )
-                physical_rewards = _award_season_champion_rewards(
-                    champion_key, countries, alliances, world_bank, turn_counter
-                )
-                alliance_reward_text = "、".join(
-                    f"{countries[m].get('display_name', m)}:{amount}"
-                    for m, amount in physical_rewards.get("members", [])
-                ) or "無"
-                print(
-                    f"💰 [冠軍實體獎勵] 冠軍【{champion_data['display_name']}】獲 {physical_rewards['champion']} 大洋；"
-                    f"聯盟成員獎勵合計 {physical_rewards['alliance_pool']}（{alliance_reward_text}）。"
-                )
-                print(f"🏆 [第 {count_round} 屆結算] 恭喜【{champion_data['display_name']}】以 {champion_power} 戰力獲勝！")
-                print(
-                    f"🧠 [爭冠學習] 冠軍 Q 獎勵 +{SEASON_CHAMPION_Q_REWARD:.1f}；"
-                    f"亞軍 +{SEASON_RUNNER_UP_Q_REWARD:.1f}；"
-                    f"季軍 +{SEASON_THIRD_Q_REWARD:.1f}，其餘依名次递減。"
-                )
-                # 終局獎勵屬於重要學習結果，不等下一個定期存檔點。
-                save_all_agents(rl_agents, file_path=q_tables_file)
-
-            # 本屆正式完成；累積時間只計本屆規定秒數，
-            # 避免 Game Loop 排程延遲造成額外秒數灌入下一屆。
-            old_policy_index = float(world_bank.get("policy_price_index", 1.0) or 1.0)
-            new_policy_index = (policy_index_settle_season(
-                world_bank, countries, world_market, MARKET_RESOURCE_META, count_round, turn_counter
-            ) if MARKET_ECONOMY_ENABLED else old_policy_index)
-            world_bank["currency_rename_trigger_rate"] = WORLD_BANK_ISSUE_TRIGGER_RATE
-            changed_resource = (settle_currency_name(
-                world_bank, world_market, MARKET_RESOURCE_META,
-                WORLD_CURRENCY_NAME_OPTIONS, count_round, turn_counter
-            ) if MARKET_ECONOMY_ENABLED else None)
-            if changed_resource:
-                _redenominate_currency(world_bank, countries, world_market, factor=10)
-                print(f"💱 [貨幣重定面額] {MARKET_RESOURCE_META[changed_resource]['name']}降至預設價 10% 或以下；"
-                      f"幣名改為 {world_bank['currency']}，國家餘額、銀行帳本及市場報價均乘 10，無新發購買。")
-            if abs(new_policy_index - old_policy_index) > 1e-8:
-                print(f"📊 [政策價格指數] 第 {count_round} 屆：{old_policy_index:.4f} → {new_policy_index:.4f}；"
-                      f"下屆生育費 {policy_cost(BIRTH_POLICY_GOLD_COST, world_bank):,} {world_bank['currency']}。")
-            completed_runtime_seconds += float(time_total)
-            count_round += 1  # 進入下一屆
-            season_start_turn = int(turn_counter)
-
-            # 重置戰術狀態
-            for name, c_data in countries.items():
-                c_data["recent_attackers"] = []
-                c_data["infamy"] = 0
-            start_time = time.time()  # 新一屆從 0 秒開始
-
-            # 結算後立即留下人類可讀的進度提示。
-            # 完整世界狀態仍會在下一個 Game Loop 正常寫入。
-            try:
-                _atomic_write_text(
-                    runtime_progress_text_file,
-                    (
-                        f"亂世演算｜執行進度\n"
-                        f"第 {count_round} 屆\n"
-                        f"本屆已執行：0.0 / "
-                        f"{float(time_total):.0f} 秒\n"
-                        f"本屆剩餘：約 {float(time_total):.1f} 秒\n"
-                        f"已完成歷屆秒數："
-                        f"{float(completed_runtime_seconds):.1f} 秒\n"
-                        f"累積模擬時間："
-                        f"{float(completed_runtime_seconds):.1f} 秒\n"
-                        f"Turn：{turn_counter}\n"
-                    ),
-                )
-            except Exception as progress_error:
-                print(
-                    f"⚠️ [進度紀錄警告] {progress_error}"
-                )
-
-        historian.annual(countries, turn_counter, season_phase, history_remaining)
         # 本輪所有 LOG 統一落盤；Full GC 改為每 30 輪一次。
         flush_game_log(force=True)
         if max_turns and turn_counter >= max_turns:
-            historian.flush(close=True)
             print(f"🧪 [測試模式] 已完成指定的 {max_turns} 輪，正常停止。")
             flush_game_log(force=True)
             break
