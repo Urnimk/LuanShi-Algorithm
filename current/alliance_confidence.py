@@ -387,4 +387,4 @@ def summary_fields(name, meta, year, rank, denominator):
     created=meta.get('created_turn')
     age=max(0,year-int(created if created is not None else meta.get('observed_since',year)))
     return dict(age_text=(f'{age:,} 年' if created is not None else f'至少 {age:,} 年（舊檔成立年未記錄）'),
-                ranking_text=f'第 {rank} / {denominator} 名（普通聯盟，依總戰力）')
+                ranking_text=f'第 {rank} / {denominator} 名')

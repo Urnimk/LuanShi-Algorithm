@@ -1952,17 +1952,18 @@ class GameInterfaceUI:
 
         summary_rows = [
             ("聯盟名稱", selected_name),
-            ("聯盟類型", entity_type_text),
+            # ("聯盟類型", entity_type_text),
             ("總戰力", f"{a.get('total_power', 0):,}"),
-            ("累計冠軍", a.get("championship_text", "待更新")),
-            ("現成員任內冠軍", "、".join(
-                f"{self._relation_display_name(k,self.raw_countries_data[k])}：{honors.member_text(a,k)}"
-                for m in members for k in [self.resolve_country_key(m)]
-                if k and k in self.raw_countries_data) or "無"),
+            # ("現成員任內冠軍", "、".join(
+            #     f"{self._relation_display_name(k,self.raw_countries_data[k])}：{honors.member_text(a,k)}"
+            #     for m in members for k in [self.resolve_country_key(m)]
+            #     if k and k in self.raw_countries_data) or "無"),
             (
                 "成員數量",
                 f"{a.get('alive_member_count', 0)} / {a.get('member_count', 0)}（存活 / 總數）",
             ),
+
+            ("累計冠軍", f"{a.get("championship_text", "待更新")} 次"),
             # (
             #     "目前狀態",
             #     f"⚔️ 參與 {active_war_count} 場戰爭"
