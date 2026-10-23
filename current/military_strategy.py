@@ -59,7 +59,9 @@ def plan(agent,c,year):
     food_years=c.get('food',0)/max(1,c.get('pop_total',1)+c.get('soldiers',0))
     best=max(x['score'] for x in options)
     valid=[x['index'] for x in options if x['score']>=best-.6]
-    choice=policy.choose(s,valid);selected=options[choice]
+    advice=(getattr(agent,'_last_library_advice',None) or {}).get('military_bias')
+    choice=policy.choose(s,valid,advice=advice) if advice else policy.choose(s,valid)
+    selected=options[choice]
     old=float(c.get('military_target_ratio',.3));delta=max(-STEP,min(STEP,selected['target']-old))
     new=round(max(.12,min(.5,old+delta)),3)
     c['military_target_ratio']=new;c['military_plan_after']=year+COOLDOWN

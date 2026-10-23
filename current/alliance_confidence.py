@@ -46,12 +46,81 @@ def sync(c, year):
     return s
 
 
+JOURNAL_RETENTION_YEARS = 1000
+_journal_state = {}
+
+
+def prune_journal(path, year, force=False):
+    """Keep exactly the current year and its previous 999 years; stream old files.
+
+    Runtime cache avoids rescanning until the oldest retained row expires.
+    Replacement is atomic; failed cleanup leaves the original intact.
+    """
+    if not path:
+        return
+    import json
+    import os
+    import tempfile
+    path = os.path.abspath(os.fspath(path))
+    year = int(year)
+    cutoff = year - JOURNAL_RETENTION_YEARS + 1
+    try:
+        st = os.stat(path)
+        stamp = (st.st_mtime_ns, st.st_size)
+    except FileNotFoundError:
+        _journal_state[path] = dict(year=year, due=year + JOURNAL_RETENTION_YEARS, stamp=None)
+        return
+    previous = _journal_state.get(path)
+    if (not force and previous and previous['stamp'] == stamp
+            and year >= previous['year'] and year < previous['due']):
+        previous['year'] = year
+        return
+    temp = None
+    try:
+        oldest = None
+        with tempfile.NamedTemporaryFile(mode='wb', dir=os.path.dirname(path),
+                                         prefix='.confidence-', suffix='.tmp', delete=False) as dst:
+            temp = dst.name
+            with open(path, 'rb') as src:
+                for line in src:
+                    try:
+                        row = json.loads(line)
+                        row_year = row.get('year')
+                        if isinstance(row_year, bool) or not isinstance(row_year, int):
+                            continue
+                    except (ValueError, TypeError, AttributeError, UnicodeError):
+                        continue
+                    if cutoff <= row_year <= year:
+                        dst.write(line.rstrip(b'\r\n') + b'\n')
+                        oldest = row_year if oldest is None else min(oldest, row_year)
+        os.replace(temp, path)
+        temp = None
+        st = os.stat(path)
+        _journal_state[path] = dict(year=year, due=(oldest + JOURNAL_RETENTION_YEARS if oldest is not None else year + JOURNAL_RETENTION_YEARS),
+                                    stamp=(st.st_mtime_ns, st.st_size))
+    finally:
+        if temp is not None:
+            try:
+                os.unlink(temp)
+            except OSError:
+                pass
+
+
 def journal(path, event):
-    """Append-only causal archive: game.log itself retains only its last 1000 lines."""
+    """Detailed causal archive limited to the latest 1000 simulation years."""
     if path:
         import json
+        import os
+        year = int(event['year'])
+        prune_journal(path, year)
         with open(path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(event, ensure_ascii=False, separators=(',', ':')) + '\n')
+        absolute = os.path.abspath(os.fspath(path))
+        state = _journal_state.get(absolute)
+        if state:
+            st = os.stat(path)
+            state['stamp'] = (st.st_mtime_ns, st.st_size)
+            state['due'] = min(state['due'], year + JOURNAL_RETENTION_YEARS)
 
 
 def record_event(c, year, reason, trust=0, bond=0, **facts):

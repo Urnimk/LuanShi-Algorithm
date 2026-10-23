@@ -1,0 +1,122 @@
+{
+  "base": "本次上傳的亂世演算_V10_世界圖書館與文明傳承版.rar",
+  "version": "亂世演算_V11_逆襲史書與經驗比對版",
+  "unit_tests": 114,
+  "passed": true,
+  "disabled_control": {
+    "years": 250,
+    "seed": 71,
+    "countries_equal": true,
+    "alliances_equal": true,
+    "rng_equal": true
+  },
+  "runs": [
+    {
+      "seed": 17,
+      "years": 1000,
+      "countries": 100,
+      "alive": 99,
+      "books": 26,
+      "kinds": {
+        "失敗與興亡": 20,
+        "冠軍成就": 2,
+        "成長與復甦": 4
+      },
+      "tags": {
+        "覆亡警示": 16,
+        "同起點競逐": 1,
+        "存續中的衰退": 4,
+        "中堅突破": 1,
+        "弱國崛起": 2,
+        "衰退後復甦": 2
+      },
+      "stats": {
+        "consultations": 145,
+        "adoptions": 82,
+        "reviews": 69
+      },
+      "library_bytes": 9775621,
+      "total_population": 424085,
+      "nominal_power": 7542300
+    },
+    {
+      "seed": 37,
+      "years": 1000,
+      "countries": 100,
+      "alive": 100,
+      "books": 33,
+      "kinds": {
+        "失敗與興亡": 27,
+        "冠軍成就": 2,
+        "成長與復甦": 4
+      },
+      "tags": {
+        "覆亡警示": 23,
+        "同起點競逐": 1,
+        "存續中的衰退": 4,
+        "霸權守成": 1,
+        "弱國崛起": 2,
+        "衰退後復甦": 2
+      },
+      "stats": {
+        "consultations": 145,
+        "adoptions": 98,
+        "reviews": 69
+      },
+      "library_bytes": 9868087,
+      "total_population": 326745,
+      "nominal_power": 5806050
+    }
+  ],
+  "checks": [
+    "行動嘗試、成功失敗與分期總量相符",
+    "成長書完整500年",
+    "覆亡書最多300年且未跨世代",
+    "案例無未來資料",
+    "同戰力開局不冒充弱國逆襲",
+    "歷史紀錄與藏書有界",
+    "離線HTML連結與比較表完整"
+  ],
+  "limitations": [
+    "兩組種子並非AI必然改善的證明",
+    "Windows Tk介面未在實機點擊驗證",
+    "外部援助、戰果分配與反事實因果未完整量化"
+  ],
+  "sample_books": [
+    {
+      "title": "深淵巨妖：冠軍之路（第2屆）",
+      "tag": "中堅突破",
+      "start": 26,
+      "end": 1,
+      "decisions": 255
+    },
+    {
+      "title": "符文刻印II：成長與復甦紀（第2屆）",
+      "tag": "弱國崛起",
+      "start": 98,
+      "end": 58,
+      "decisions": 225
+    },
+    {
+      "title": "路過鄉民II：成長與復甦紀（第2屆）",
+      "tag": "衰退後復甦",
+      "start": 94,
+      "end": 67,
+      "decisions": 291
+    },
+    {
+      "title": "深海歌姬：興衰與覆亡（第2屆）",
+      "tag": "存續中的衰退",
+      "start": 7,
+      "end": 78,
+      "decisions": 193
+    },
+    {
+      "title": "地獄烈焰：興衰與覆亡（第2屆）",
+      "tag": "覆亡警示",
+      "start": 44,
+      "end": 100,
+      "decisions": 165
+    }
+  ]
+}

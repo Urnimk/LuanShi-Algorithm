@@ -37,7 +37,7 @@ last_sync_time = time.time()  # 紀錄最後同步時間點（初始化為當前
 world_stage_g = 0  # RL 世界力量階段：BALANCED / RISING / EMPIRE
 world_mode_g = "平常局勢"
 world_mode_code_g = "NORMAL"
-ENGINE_VERSION = "亂世演算_V10_世界圖書館與文明傳承版"
+ENGINE_VERSION = "亂世演算_V12_冠軍路徑與階段學習版"
 
 # True：保留世界貨幣、市場與交易 AI；False：完整停用並改採混合資源政策成本。
 MARKET_ECONOMY_ENABLED = False
@@ -6588,11 +6588,16 @@ class ExpectedSarsaLambdaPolicy:
         for a, bias in (advice or {}).items():
             if a in valid and math.isfinite(float(bias)):
                 scores[a] += float(_clamp(bias, -world_library.BIAS_LIMIT, world_library.BIAS_LIMIT))
-        if random.random() < epsilon or max(scores[a] for a in valid) - min(scores[a] for a in valid) < 1e-12:
+        exploring = random.random() < epsilon or max(scores[a] for a in valid) - min(scores[a] for a in valid) < 1e-12
+        if exploring:
             action = random.choice(valid)
         else:
             best = max(scores[a] for a in valid)
             action = random.choice([a for a in valid if abs(scores[a] - best) < 1e-12])
+        baseline_best = [a for a in valid if abs(q_values[a] - max(q_values[x] for x in valid)) < 1e-12]
+        advised_best = [a for a in valid if abs(scores[a] - max(scores[x] for x in valid)) < 1e-12]
+        self._last_advice_effect = dict(exploring=exploring,baseline_best=baseline_best,
+                                       advised_best=advised_best,best_set_changed=set(baseline_best)!=set(advised_best))
         self._last_state = tuple(state)
         self._last_action = int(action)
         self._last_epsilon = epsilon
@@ -7098,9 +7103,10 @@ class CountryRLAgent:
         self._last_library_snapshot = None
         if library_runtime is not None and library_runtime.enabled:
             year = int(country_data.get("current_turn", library_runtime.last_year + 1))
-            self._last_library_snapshot = world_library.snapshot(self.country_name, country_data, year, library_runtime.peers)
+            self._last_library_snapshot = library_runtime.decision_snapshot(self.country_name, country_data, year)
             self._last_library_advice = library_runtime.advise(self.country_name, country_data, year, strategic_valid)
         strategic_action = self.strategic_policy.choose(state, strategic_valid, advice=self._last_library_advice.get('bias'))
+        self._last_library_advice['selection_effect'] = dict(self.strategic_policy._last_advice_effect)
         engine_action = self._resolve_engine_action(strategic_action, engine_valid, country_data)
         self._last_fiscal_state = None
         self._last_fiscal_action = None
@@ -7127,7 +7133,7 @@ class CountryRLAgent:
                     fiscal_valid.append(2)
                 if 3 in engine_valid:
                     fiscal_valid.append(3)
-            fiscal_action = self.fiscal_policy.choose(fiscal_key, fiscal_valid)
+            fiscal_action = self.fiscal_policy.choose(fiscal_key, fiscal_valid, advice=self._last_library_advice.get('fiscal_bias'))
             engine_action = {0: 7, 1: 12, 2: 13, 3: 3}[fiscal_action]
             self._last_fiscal_state = fiscal_key
             self._last_fiscal_action = fiscal_action
@@ -7484,7 +7490,8 @@ class CountryRLAgent:
         )
         # 主型始終明確標示；只有 Q 值真的非常接近才附註次傾向。
         if math.isfinite(averages[second]) and gap <= max(0.008, spread * 0.10):
-            return f"{labels[first]}（次傾向：{labels[second]}）"
+            # return f"{labels[first]}（次傾向：{labels[second]}）"
+            return f"{labels[first]}"
         return labels[first]
 
     def apply_competition_reward(self, q_reward):
@@ -10081,6 +10088,7 @@ def thread_stat_monitor():
                        turn_counter, count_round, season_start_turn, YEARS_PER_SEASON)
     global library_runtime
     library_runtime = world_library.WorldLibrary(save_path("world_library.json"), enabled=WORLD_LIBRARY_ENABLED, printer=print)
+    confidence.prune_journal(save_path("alliance_confidence_history.jsonl"), turn_counter, force=True)
     library_runtime.load(turn_counter)
     library_runtime.observe(countries, turn_counter, count_round, season_start_turn, max(0, YEARS_PER_SEASON - (turn_counter - season_start_turn)))
     library_runtime.save(force=True)
@@ -10439,6 +10447,7 @@ def thread_stat_monitor():
             countries[k]["current_coalition"] = get_country_coalition(k, anti_hegemon_coalitions)
 
         confidence.sync_metadata(countries, alliances, alliance_confidence_meta, turn_counter)
+        confidence.prune_journal(save_path("alliance_confidence_history.jsonl"), turn_counter)
         confidence.review(countries, alliances, active_wars, alliance_confidence_meta,
                           turn_counter, _leave_alliance, log=print,
                           audit_path=save_path("alliance_confidence_history.jsonl"))
@@ -12985,10 +12994,10 @@ def thread_stat_monitor():
                     actual_matches = action in STRATEGIC_TO_ENGINE_ACTIONS.get(selected_strategy, ())
                     if selected_strategy == 7 and action in (3, 7, 12, 13):
                         actual_matches = True
-                    if actual_matches and agent._last_library_snapshot is not None:
+                    if agent._last_library_snapshot is not None:
                         library_runtime.record_decision(
                             attacker_key, c_data, turn_counter, selected_strategy, action,
-                            action_success, agent._last_library_snapshot, agent._last_library_advice,
+                            action_success, agent._last_library_snapshot, agent._last_library_advice, matched=actual_matches,
                         )
                 if agent._last_fiscal_state is not None:
                     next_reserved, _ = (_market_order_reservations(world_market, attacker_key)
@@ -13794,6 +13803,7 @@ def thread_stat_monitor():
 
         # 10. 整理與序列化寫入 JSON 存檔
         confidence.sync_metadata(countries, alliances, alliance_confidence_meta, turn_counter)
+        confidence.prune_journal(save_path("alliance_confidence_history.jsonl"), turn_counter)
         honors.synchronize(countries, alliances, alliance_confidence_meta, anti_hegemon_coalitions,
                            turn_counter, count_round, season_start_turn, YEARS_PER_SEASON)
         confidence_powers = {n:sum(countries[m].get("power",0) for m in ms if countries[m].get("is_alive",True)) for n,ms in alliances.items()}

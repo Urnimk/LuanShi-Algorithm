@@ -12,7 +12,7 @@ import alliance_honors as honors
 from library_reader import LibraryReaderMixin
 
 try:
-    from 亂世演算_V10_世界圖書館與文明傳承版 import (
+    from 亂世演算_V12_冠軍路徑與階段學習版 import (
         thread_stat_monitor,
         toggle_simulation_paused,
         request_simulation_step,
@@ -27,7 +27,7 @@ except ModuleNotFoundError:
     # 下載同名版本可能被系統加上 (1)/(2)/(3)，啟動器自動載入同目錄最新引擎。
     pattern = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        "亂世演算_V10_世界圖書館與文明傳承版*.py",
+        "亂世演算_V12_冠軍路徑與階段學習版*.py",
     )
     candidates = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
     if not candidates:

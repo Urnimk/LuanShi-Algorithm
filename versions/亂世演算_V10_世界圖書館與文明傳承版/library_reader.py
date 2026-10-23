@@ -3,9 +3,9 @@ import html
 import json
 import os
 from collections import Counter
-from world_library import ACTION_NAMES,RULES,SCHEMA
+from world_library import ACTION_NAMES,RULES,SCHEMA,REVIEW_YEARS,MAX_BOOKS
 
-GUIDE='''世界圖書館｜閱讀說明
+GUIDE=f'''世界圖書館｜閱讀說明
 
 這裡收錄本次程式實際觀察到的冠軍成就、成長復甦與失敗教訓。
 每本書都能由玩家閱讀，也能供 AI 在相近處境下小幅參考。
@@ -24,12 +24,12 @@ GUIDE='''世界圖書館｜閱讀說明
 只有已出版、已完成後續觀測的案例才能查閱，不能偷看未來。
 季節階段、是否參戰、是否受保護必須相同，再比較國力、軍備、存糧、城防及盟友條件。
 圖書館只小幅加減既有合法策略的選擇分數，不複製冠軍Q表，也不移除自主探索。
-採用後15年回顧，改善、惡化與中斷都會留下紀錄。這不是嚴格因果實驗。
+採用後{REVIEW_YEARS}年回顧，改善、惡化與中斷都會留下紀錄。這不是嚴格因果實驗。
 
 四、如何閱讀與匯出？
 選取書名後閱讀正文，可調整字級。匯出本書或整座圖書館為HTML，
 下載後直接用瀏覽器打開，不需網路；也可以用瀏覽器列印為PDF。
-圖書館最多96本；早期重要著作可手動匯出留存。
+圖書館最多{MAX_BOOKS}本；早期重要著作可手動匯出留存。
 '''
 
 def pct(a,b):return (a/max(1,b)-1)*100
@@ -161,7 +161,7 @@ class LibraryReaderMixin:
             if self.library_list.exists(item):self.library_list.item(item,values=values)
             else:self.library_list.insert('','end',iid=item,values=values)
             self.library_list.move(item,'',idx)
-        stats=self._library_data.get('stats',{});self.library_status.configure(text=f"藏書 {len(all_books)}/96 本｜觀測至第{self._library_data.get('last_year',0):,}年｜研習 {stats.get('adoptions',0)} 次／完成回顧 {stats.get('reviews',0)} 次")
+        stats=self._library_data.get('stats',{});self.library_status.configure(text=f"藏書 {len(all_books)}/{MAX_BOOKS} 本｜觀測至第{self._library_data.get('last_year',0):,}年｜研習 {stats.get('adoptions',0)} 次／完成回顧 {stats.get('reviews',0)} 次")
         # Keep the open book and exact reading position stable while the simulation runs.
         if self._library_mode=='book' and not any(str(b['id'])==str(self._library_read_id) for b in all_books):
             self.library_status.configure(text='目前閱讀的著作已被新書替換；正文保留，可先匯出留存。')

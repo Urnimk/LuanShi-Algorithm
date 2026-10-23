@@ -7,13 +7,13 @@ from collections import Counter
 
 SCHEMA=1
 RULES='V10-library1:power=soldiers*50:refused-peace=capital-fall'
-MAX_BOOKS=96
+MAX_BOOKS=100
 MAX_CASES=12
 MAX_TRACK_POINTS=32
 MAX_BOOK_POINTS=24
 MAX_READINGS=200
 MAX_COUNTRIES=200
-REVIEW_YEARS=15
+REVIEW_YEARS=200
 CONSULT_COOLDOWN=25
 BIAS_LIMIT=.18
 ACTION_NAMES={0:'基礎建設投資',1:'產業配置',2:'戰時動員',3:'防禦工事',4:'結盟與共同防禦',5:'主動戰爭',6:'有限襲擾',7:'人口與生產政策',8:'反霸權圍剿',9:'背叛與機會主義',10:'聲望與外交修復',11:'短期裁軍休養',12:'長期軍備規劃'}

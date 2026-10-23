@@ -7484,7 +7484,8 @@ class CountryRLAgent:
         )
         # 主型始終明確標示；只有 Q 值真的非常接近才附註次傾向。
         if math.isfinite(averages[second]) and gap <= max(0.008, spread * 0.10):
-            return f"{labels[first]}（次傾向：{labels[second]}）"
+            # return f"{labels[first]}（次傾向：{labels[second]}）"
+            return f"{labels[first]}"
         return labels[first]
 
     def apply_competition_reward(self, q_reward):
