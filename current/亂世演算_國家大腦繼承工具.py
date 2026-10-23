@@ -17,7 +17,7 @@ DEFAULT_FILENAME = "rl_agents_q_tables.json"
 
 def choose_file():
     """優先使用本工具所在資料夾的 JSON；找不到時讓使用者輸入路徑。"""
-    default_path = Path(__file__).resolve().parent / DEFAULT_FILENAME
+    default_path = Path(__file__).resolve().parent / 'saves' / DEFAULT_FILENAME
     if default_path.exists():
         answer = input(
             f"找到預設檔案：\n{default_path}\n"
@@ -110,6 +110,10 @@ def main():
 
         # 深複製避免來源與目標在本次操作中共用同一個 Python 物件。
         data[target] = copy.deepcopy(data[source])
+        # 只繼承已學到的知識與統計，不把來源國尚未結算的個體事件交給別國。
+        data[target]['pending_decisions'] = []
+        if isinstance(data[target].get('policies'), dict):
+            data[target]['policies']['military_pending'] = None
 
         # 使用 UTF-8、縮排 JSON，方便人工檢查。
         temp_path = json_path.with_name(json_path.name + ".tmp")

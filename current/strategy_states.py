@@ -1,6 +1,7 @@
-"""戰略層 4×4×4×4 = 256 種狀態，使用可讀的中文標籤。"""
+"""戰略層 4×4×4×4×4 = 1024 種狀態，使用可讀的中文標籤。"""
 
 import json
+from military_strategy import phase as time_phase
 
 
 LABELS = (
@@ -15,7 +16,7 @@ def _tier(value):
     return min(3, max(0, int(value)))
 
 
-def strategic_state_256(state, country):
+def strategic_state_1024(state, country):
     """壓縮既有 13 欄；只動戰略 Q 的 key，不改動 Reward 或其他子策略。"""
     power, food, materials, liquidity, war, resilience, diplomacy, risk, need, world, phase, cash, rank = state
     food_level = {"FAMINE": 0, "LOW": 1, "SAFE": 2, "SURPLUS": 3}.get(food, 1)
@@ -25,7 +26,7 @@ def strategic_state_256(state, country):
     cash_level = {"NO_POLICY_BUDGET": 0, "FUNDED": 2, "CAPITAL_RICH": 3}.get(cash, 1)
     # 第一維不再用資源加權後的「生存吃緊」。舊公式在無貨幣模式及小國期
     # 幾乎永遠落在同一格，無法提供策略差異。新版改為真正的安全態勢：
-    # 保護準備／安全／受威脅／危急，仍維持 4×4×4×4 = 256 狀態。
+    # 保護準備／安全／受威脅／危急，仍維持 4×4×4×4×4 = 1024 狀態。
     current_turn = max(0, int(country.get("current_turn", 0) or 0))
     protection_until = max(
         int(country.get("newbie_protection_until_turn", 0) or 0),
@@ -71,16 +72,16 @@ def strategic_state_256(state, country):
     # 本屆後段的前十名進入爭冠圈；世界已有霸主時，排名十名外仍維持落後。
     if phase == "LATE" and contest == 1 and world != "EMPIRE":
         contest = 2
-    return (LABELS[0][security], LABELS[1][military], LABELS[2][development], LABELS[3][contest])
+    return (LABELS[0][security], LABELS[1][military], LABELS[2][development], LABELS[3][contest], time_phase(country))
 
 
 def readable_q_text(agents, action_labels):
-    """每國輸出最多 24 個常見狀態；完整 256 狀態保留在原始 JSON。"""
-    lines = ["戰略 Q 值觀察表｜狀態最多 256 種／國；數值越大代表當前估計越有利",
+    """每國輸出最多 24 個常見狀態；完整 1024 狀態保留在原始 JSON。"""
+    lines = ["戰略 Q 值觀察表｜狀態最多 1024 種／國；數值越大代表當前估計越有利",
              "注意：Q 值是學習中的相對估計；未試過的動作會顯示為零。", ""]
     for name, agent in sorted(agents.items()):
         policy = agent.strategic_policy
-        lines.append(f"國家：{name}｜已造訪狀態 {len(policy.q_table)}/256｜戰略決策 {policy.decision_count} 次")
+        lines.append(f"國家：{name}｜已造訪狀態 {len(policy.q_table)}/1024｜戰略決策 {policy.decision_count} 次")
         entries = sorted(policy.q_table.items(),
                          key=lambda item: (-int(policy.visit_counts.get(item[0], 0) or 0), item[0]))
         for key, values in entries[:24]:

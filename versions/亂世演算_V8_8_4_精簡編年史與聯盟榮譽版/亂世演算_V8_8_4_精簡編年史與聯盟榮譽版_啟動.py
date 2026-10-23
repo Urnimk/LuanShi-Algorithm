@@ -772,8 +772,8 @@ class GameInterfaceUI:
 
         # 數值欄固定；只有「國家」欄吸收剩餘空間，右側不留白。
         for col, title, width, anchor in (
-            ("name",     "國家",  180, "w"),
-            ("rank",     "排名",  75, "center"),
+            ("name",     "國家",  120, "w"),
+            ("rank",     "排名",  100, "center"),
             ("power",    "戰力",  115, "center"),
             ("pop",      "人口",  105, "center"),
             # ("soldiers", "士兵",  145, "center"),

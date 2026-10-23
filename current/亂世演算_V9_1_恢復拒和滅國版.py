@@ -12,9 +12,17 @@ import csv
 import alliance_confidence as confidence
 import alliance_honors as honors
 import chronicle_retention as retention
+import military_strategy
+import war_strategy
+
+class _V9EngineAPI:
+    def __getattr__(self, name):
+        return globals()[name]
+
+V9_API = _V9EngineAPI()
 from collections import deque  # 從 collections 匯入雙端隊列 deque，用於維護固定長度的 Log 訊息緩衝區
 from decision_analysis import NationalDecisionHub
-from strategy_states import strategic_state_256, readable_q_text
+from strategy_states import strategic_state_1024, readable_q_text
 from policy_index import policy_cost, initialize as policy_index_initialize, settle_season as policy_index_settle_season, settle_currency_name
 from fiscal_policy import (FISCAL_ACTIONS, treasury_circulation, fiscal_state,
                            fiscal_valid_actions, delayed_fiscal_reward, fiscal_q_report)
@@ -24,7 +32,7 @@ last_sync_time = time.time()  # 紀錄最後同步時間點（初始化為當前
 world_stage_g = 0  # RL 世界力量階段：BALANCED / RISING / EMPIRE
 world_mode_g = "平常局勢"
 world_mode_code_g = "NORMAL"
-ENGINE_VERSION = "亂世演算_V8_8_4_精簡編年史與聯盟榮譽版"
+ENGINE_VERSION = "亂世演算_V9_1_恢復拒和滅國版"
 
 # True：保留世界貨幣、市場與交易 AI；False：完整停用並改採混合資源政策成本。
 MARKET_ECONOMY_ENABLED = False
@@ -66,7 +74,7 @@ ALLIANCE_UNDERFILLED_JOIN_BONUS = {
 }
 
 # 【弱國主權韌性】不延長無敵期，改用準備、外交代價、本土防禦與分層戰敗
-SUBJUGATION_BEFORE_ANNEXATION = 0       # 第一次國都陷落先附庸，再次才可能滅國
+SUBJUGATION_BEFORE_ANNEXATION = 0       # 0：合法攻陷後直接亡國；設 1 才是首次先附庸
 PRE_RELEASE_GUARANTEED_ACTION_YEARS = 50 # 脫保前最後 50 年每年保證一次自主決策
 POST_PROTECTION_TRANSITION_YEARS = 50   # 脫保後國際仍特別關注的過渡期
 POST_PROTECTION_TARGET_SCORE_PENALTY = 45.0
@@ -1555,6 +1563,8 @@ def _market_match_orders(countries, market, bank, turn_counter):
 
 
 def _apply_birth_policy(data, bank):
+    if not military_strategy.birth_worthwhile(data):
+        return False, 0
     if MARKET_ECONOMY_ENABLED:
         cost = policy_cost(BIRTH_POLICY_GOLD_COST, bank)
         gold = max(0, int(data.get("gold", 0) or 0))
@@ -1587,6 +1597,8 @@ def _apply_birth_policy(data, bank):
 
 
 def _apply_production_policy(data, bank):
+    if int(data.get('production_policy_turns', 0)) > 1:
+        return False, 0
     if MARKET_ECONOMY_ENABLED:
         cost = policy_cost(PRODUCTION_POLICY_GOLD_COST, bank)
         gold = max(0, int(data.get("gold", 0) or 0))
@@ -1637,7 +1649,18 @@ def _diplomatic_gold_aid(donor_key, countries, alliances):
             -int(countries[k].get("power", 0) or 0),
         ),
     )
-    if MARKET_ECONOMY_ENABLED:
+    if war_strategy.protected(donor, int(donor.get('current_turn', 0))):
+        transfers = {}
+        for resource in (('gold',) if MARKET_ECONOMY_ENABLED else ('food', 'wood', 'metal')):
+            amount = war_strategy.safe_aid_amount(donor, resource, .03)
+            if amount:
+                donor[resource] -= amount
+                countries[target_key][resource] = countries[target_key].get(resource, 0) + amount
+                transfers[resource] = amount
+        if not transfers:
+            return None
+        amount = _mixed_cost_value(transfers)
+    elif MARKET_ECONOMY_ENABLED:
         amount = min(donor_gold, random.randint(policy_cost(DIPLOMACY_GOLD_MIN, donor), policy_cost(DIPLOMACY_GOLD_MAX, donor)), max(policy_cost(DIPLOMACY_GOLD_MIN, donor), int(donor_gold * 0.18)))
         amount = max(0, int(amount))
         if amount <= 0:
@@ -1680,6 +1703,8 @@ def _alliance_resource_aid(donor_key, countries, alliances):
         surplus = max(0, int(float(donor.get(res, 0) or 0) - target_stock * 1.10))
         cap = {"food": 220, "wood": 90, "metal": 50}[res]
         amount = min(cap, int(surplus * 0.18))
+        if war_strategy.protected(donor, int(donor.get('current_turn', 0))):
+            amount = min(amount, war_strategy.safe_aid_amount(donor, res, .04))
         if amount > 0:
             donor[res] = max(0, int(donor.get(res, 0) or 0) - amount)
             target[res] = max(0, int(target.get(res, 0) or 0)) + amount
@@ -1688,6 +1713,8 @@ def _alliance_resource_aid(donor_key, countries, alliances):
     if MARKET_ECONOMY_ENABLED:
         gold_surplus = max(0, int(donor.get("gold", 0) or 0) - policy_cost(180 * MONEY_RATIO, donor))
         gold_amount = min(policy_cost(80 * MONEY_RATIO, donor), int(gold_surplus * 0.15))
+        if war_strategy.protected(donor, int(donor.get('current_turn', 0))):
+            gold_amount = min(gold_amount, war_strategy.safe_aid_amount(donor, 'gold', .03))
         if gold_amount > 0:
             donor["gold"] -= gold_amount
             target["gold"] = max(0, int(target.get("gold", 0) or 0)) + gold_amount
@@ -1764,6 +1791,8 @@ def _alliance_execute_layer_action(country_key, action, countries, alliances, ma
             # 緊急救援追加有限糧食，不使援助國低於自身安全庫存。
             reserve = _market_target_stock(data, "food")
             extra = min(250, max(0, int(data.get("food", 0) - reserve * 1.15)))
+            if war_strategy.protected(data, turn_counter):
+                extra = min(extra, war_strategy.safe_aid_amount(data, 'food', .03))
             if extra > 0:
                 data["food"] -= extra
                 countries[result["target"]]["food"] += extra
@@ -2887,11 +2916,7 @@ def _country_effective_war_power(country_key, countries, active_wars, defending=
     exhaustion = _clamp(float(data.get("war_exhaustion", 0) or 0), 0.0, 100.0)
     exhaustion_factor = 1.0 - exhaustion * 0.0045
     front_count = _war_country_war_count(country_key, active_wars)
-    front_factor = (
-        1.0 if front_count == 0
-        else WARSTATE["SECOND_FRONT_FORCE_MULTIPLIER"] if front_count == 1
-        else 0.20
-    )
+    front_factor = war_strategy.projected_front_share(country_key, active_wars, defending)
     defense_factor = 1.0
     if defending:
         defense_factor += min(
@@ -3361,6 +3386,8 @@ def _alliance_vote_member_offense(
     turn_counter,
 ):
     """普通聯盟主動開戰：每個盟國投 贊成 / 反對 / 棄權。"""
+    if war_strategy.protected(countries[voter_key], turn_counter):
+        return "反對", "保護期間不參加盟方進攻"
     if voter_key == proposer_key:
         return "贊成", "提案國"
 
@@ -3684,10 +3711,15 @@ def _alliance_member_defense_support(
     elif mode == "SCARCITY":
         score -= 0.10
 
-    score += random.uniform(-0.12, 0.12)
-
+    trust = c.get('alliance_confidence') or {}
+    historical = ((float(trust.get('trust', 50)) - 50) * .002
+                  + float(trust.get('comradeship', 0)) * .002
+                  + min(.10, float(trust.get('aid_received', 0)) / max(1000, soldiers * 10)))
+    burden = min(.20, _war_country_war_count(member_key, active_wars) * .10)
+    score += historical - burden + random.uniform(-0.06, 0.06)
     support = score >= 0.50
-    return support, ("履行共同防禦" if support else "拒絕增援")
+    return support, (f"{'履行共同防禦' if support else '拒絕增援'}；評分{score:.2f}、"
+                     f"信任／情誼／互助{historical:+.2f}、戰線負擔{-burden:+.2f}、疲勞{exhaustion:.1f}")
 
 
 def _alliance_defensive_support_vote(
@@ -3732,7 +3764,8 @@ def _alliance_defensive_support_vote(
             # 新手保護期內仍可履行聯盟義務，但不直接投入主戰線，
             # 改成有限度的經濟支援，避免「加入聯盟＝立刻被拖進大戰」。
             protection_until = int(
-                countries[member].get("newbie_protection_until_turn", 0) or 0
+                max(countries[member].get("newbie_protection_until_turn", 0) or 0,
+                    countries[member].get("rebuild_protection_until_turn", 0) or 0)
             )
             if (
                 member != defender_key
@@ -3765,7 +3798,7 @@ def _alliance_defensive_support_vote(
         for res, rate in (("gold", 0.03), ("food", 0.04), ("wood", 0.04), ("metal", 0.03)):
             stock = max(0, int(donor.get(res, 0) or 0))
             # 保留大部分家底，避免新手因履行盟約而失去發展能力。
-            amount = min(stock, int(stock * rate))
+            amount = war_strategy.safe_aid_amount(donor, res, rate)
             if amount <= 0:
                 continue
             donor[res] = stock - amount
@@ -5645,6 +5678,8 @@ def update_rts_economy_and_jobs(data, market=None):
     elif post_prod_food_turns < 5.0:
         effective_ratio = min(effective_ratio, 0.20)
 
+    if (not martial_law_active and int(data.get('current_turn', 0)) < int(data.get('military_rest_until', 0))):
+        effective_ratio = min(effective_ratio, float(data.get('military_rest_ratio', effective_ratio)))
     desired_soldiers = min(int(pop_total * effective_ratio), pop_total // 2)
 
     # 糧荒時上面已做過一次「限額漸進縮編」，這裡不再重複退伍。
@@ -5875,7 +5910,7 @@ def update_rts_economy_and_jobs(data, market=None):
 # ====================================================
 # V7 取消固定人格與人格探索偏好。
 # V8_2 因加入延遲評估、造訪統計及下一狀態 Action Mask，RL_VERSION 升為 5。
-RL_VERSION = 8  # 第一維由「生存資源」改為「安全態勢」；戰略 Q 需乾淨重學
+RL_VERSION = 9  # 第一維由「生存資源」改為「安全態勢」；戰略 Q 需乾淨重學
 RL_ALGORITHM = "EXPECTED_SARSA_LAMBDA"
 RL_LAMBDA = 0.80
 RL_GAMMA = 0.975
@@ -5936,6 +5971,7 @@ RL_ACTIONS = {
     13: "增產補貼",
     14: "外交金援",
     15: "聯盟援助",
+    16: "規劃長期軍備",
 }
 RL_ACTION_SIZE = len(RL_ACTIONS)
 
@@ -5943,7 +5979,7 @@ STRATEGIC_ACTIONS = {
     0: "基礎建設投資",
     1: "產業與糧食配置",
     2: "軍備與動員",
-    3: "防禦修復與休養",
+    3: "防禦工事",
     4: "結盟與共同防禦",
     5: "主動戰爭",
     6: "有限襲擾與施壓",
@@ -5951,13 +5987,15 @@ STRATEGIC_ACTIONS = {
     8: "反霸權與圍剿",
     9: "背叛與機會主義",
     10: "聲望與外交修復",
+    11: "短期裁軍休養",
+    12: "長期軍備規劃",
 }
 STRATEGIC_TO_ENGINE_ACTIONS = {
-    0: (3,), 1: (7,), 2: (6,), 3: (5, 11),
+    0: (3,), 1: (7,), 2: (6,), 3: (5,),
     4: (1,), 5: (0,), 6: (10,), 7: (12, 13),
     8: (2,),
     9: (4,),
-    10: (9,),
+    10: (9,), 11: (11,), 12: (16,),
 }
 MARKET_ACTIONS = {
     0: "不交易", 1: "買糧", 2: "買木", 3: "買金屬",
@@ -6195,6 +6233,8 @@ def _evaluate_prewar_mobilization(country_key, countries, active_wars, alive_sor
 
 RL_SNAPSHOT_FIELDS = (
     "is_alive", "power", "pop_total", "farmers", "soldiers",
+    "season_years_remaining", "military_target_ratio", "battle_threat_ratio", "battle_starts_in",
+    "country_generation", "champion_gap_ratio", "battle_readiness",
     "food", "wood", "metal", "gold", "current_alliance", "recent_attackers",
     "infamy", "prev_power", "annexed_count",
     "market_price_food", "market_price_wood", "market_price_metal",
@@ -6423,16 +6463,19 @@ def get_valid_rl_actions(attacker_key, countries, alliances, anti_hegemon_coalit
     if soldiers >= 5 and hostile_targets and food >= 30:
         valid.add(10)
 
-    # 11 裁軍：有士兵才能裁。
-    if soldiers > 0:
+    # 短期退役與長期目標獨立；危急時僅允許補給破產的必要退役。
+    if (soldiers > 0 and turn_counter >= int(c.get('demobilize_after', 0))
+            and (not c.get('current_wars') or food < (pop + soldiers) * 3)):
         valid.add(11)
 
-    # 12 鼓勵生育：需要政策預算。
-    if not MARKET_ECONOMY_ENABLED or gold >= policy_cost(BIRTH_POLICY_GOLD_COST, c):
+    if turn_counter >= int(c.get('military_plan_after', 0)):
+        valid.add(16)
+    # 政策效果未到期、沒有住房或安全糧時，不重複購買生育政策。
+    if military_strategy.birth_worthwhile(c) and (not MARKET_ECONOMY_ENABLED or gold >= policy_cost(BIRTH_POLICY_GOLD_COST, c)):
         valid.add(12)
 
     # 13 增產補貼：需要政策預算。
-    if not MARKET_ECONOMY_ENABLED or gold >= policy_cost(PRODUCTION_POLICY_GOLD_COST, c):
+    if int(c.get('production_policy_turns', 0)) <= 1 and (not MARKET_ECONOMY_ENABLED or gold >= policy_cost(PRODUCTION_POLICY_GOLD_COST, c)):
         valid.add(13)
 
     # 14 外交金援：需有大洋且世界上還有其他存活國家。
@@ -6445,6 +6488,8 @@ def get_valid_rl_actions(attacker_key, countries, alliances, anti_hegemon_coalit
         if partners and (not MARKET_ECONOMY_ENABLED or gold > policy_cost(180 * MONEY_RATIO, c) or food > 250 or wood > 150 or metal > 100):
             valid.add(15)
 
+    if war_strategy.protected(c, turn_counter):
+        valid.difference_update((0, 2, 4, 10))
     return sorted(valid)
 
 
@@ -6660,6 +6705,9 @@ class CountryRLAgent:
         self.strategic_policy = ExpectedSarsaLambdaPolicy(
             f"{country_name}:strategic", len(STRATEGIC_ACTIONS), policy_data.get("strategic"), max_states=3500
         )
+        self.military_policy = ExpectedSarsaLambdaPolicy(
+            f"{country_name}:military", len(military_strategy.TARGETS), policy_data.get('military'), max_states=720)
+        self.military_pending = policy_data.get('military_pending')
         self.market_policy = ExpectedSarsaLambdaPolicy(
             f"{country_name}:market", len(MARKET_ACTIONS), policy_data.get("market"), max_states=1800
         )
@@ -6940,7 +6988,7 @@ class CountryRLAgent:
             country_data, total_world_power, alive_count, MONEY_RATIO
         )
         self.last_brain_report = report.as_dict()
-        return strategic_state_256(NationalDecisionHub.strategic_state(existing_state, country_data, report), country_data)
+        return strategic_state_1024(NationalDecisionHub.strategic_state(existing_state, country_data, report), country_data)
 
     @staticmethod
     def _strategic_valid_actions(engine_valid_actions):
@@ -6955,8 +7003,6 @@ class CountryRLAgent:
         candidates = [a for a in STRATEGIC_TO_ENGINE_ACTIONS[int(strategic_action)] if a in set(engine_valid_actions or [])]
         if not candidates:
             return 3 if 3 in engine_valid_actions else engine_valid_actions[0]
-        if int(strategic_action) == 3:
-            return 11 if (country_data.get("war_exhaustion", 0) > 45 or country_data.get("food", 0) < country_data.get("pop_total", 1) * 3) and 11 in candidates else candidates[0]
         if int(strategic_action) == 7:
             return 12 if country_data.get("food", 0) > country_data.get("pop_total", 1) * 8 and 12 in candidates else candidates[-1]
         return candidates[0]
@@ -7027,6 +7073,17 @@ class CountryRLAgent:
 
         # 風險由七個只讀分析腦提供給 State；Q 值與 Action Mask 決定動作。
         # 農夫／士兵比例、極端戰前風險不再越過 Q-learning 強制動員。
+        # 新狀態使用可被學習覆寫的小幅先驗，避免危機新格全零盲抽。
+        if int(self.strategic_policy.visit_counts.get(state_key, 0) or 0) == 0:
+            q_values = self.strategic_policy._ensure(state_key)
+            if country_data.get('battle_readiness'):
+                for idx, prior in ((2, .18), (3, .16), (12, .22)):
+                    if idx in strategic_valid:
+                        q_values[idx] = max(q_values[idx], prior)
+            elif int(country_data.get('season_years_remaining', 500)) <= 50 and int(country_data.get('world_rank', 999)) <= 10:
+                for idx, prior in ((2, .12), (12, .18)):
+                    if idx in strategic_valid:
+                        q_values[idx] = max(q_values[idx], prior)
         strategic_action = self.strategic_policy.choose(state, strategic_valid)
         engine_action = self._resolve_engine_action(strategic_action, engine_valid, country_data)
         self._last_fiscal_state = None
@@ -7349,6 +7406,8 @@ class CountryRLAgent:
     def policy_payload(self):
         return {
             "strategic": self.strategic_policy.to_dict(),
+            "military": self.military_policy.to_dict(),
+            "military_pending": self.military_pending,
             "market": self.market_policy.to_dict(),
             "market_price": self.market_price_policy.to_dict(),
             "market_size": self.market_size_policy.to_dict(),
@@ -7364,7 +7423,8 @@ class CountryRLAgent:
         """
         labels = {
             0: "經濟建設型", 1: "農業安全型", 2: "軍備動員型",
-            3: "防禦休養型", 4: "外交聯盟型", 5: "征服擴張型",
+            11: "休養調整型", 12: "軍備規劃型",
+            3: "防禦工事型", 4: "外交聯盟型", 5: "征服擴張型",
             6: "襲擾施壓型", 7: "財政人口型", 8: "反霸權圍剿型",
             9: "背叛機會型",
             10: "聲望修復型",
@@ -7449,6 +7509,7 @@ class CountryRLAgent:
             "亡國重建": (0.28, 0.65, 0.25),
         }.get(str(kind), (0.85, 0.92, 0.82))
         self.strategic_policy.decay_memory(retention[0])
+        self.military_policy.decay_memory(retention[0])
         self.market_policy.decay_memory(retention[1])
         self.market_price_policy.decay_memory(retention[1])
         self.market_size_policy.decay_memory(retention[1])
@@ -7457,9 +7518,9 @@ class CountryRLAgent:
 
     def schedule_delayed_evaluation(self, state_data, action, turn_counter, action_success):
         fiscal_action = getattr(self, '_last_fiscal_action', None)
-        if not action_success or action not in (0, 1, 3, 12, 13, 14, 15):
+        if not action_success or action not in (0, 1, 3, 6, 11, 12, 13, 14, 15, 16):
             return
-        horizon = {0: 8, 1: 10, 3: 8, 12: BIRTH_POLICY_DURATION,
+        horizon = {0: 8, 1: 10, 3: 8, 6: 5, 11: 5, 16: 5, 12: BIRTH_POLICY_DURATION,
                    13: PRODUCTION_POLICY_DURATION, 14: 5, 15: 5}[action]
         self.pending_decisions.append({
             "state": getattr(self, "_last_state_str", str(tuple())),
@@ -7614,7 +7675,7 @@ def load_all_agents(country_list, file_path=None):
                         shutil.copy2(file_path, migration_backup)
                     print(
                         f"🧬 [RL Migration] 舊版 {sorted(versions)} Q-Table 已封存為 {migration_backup}；"
-                        "世界存檔保留，V8_4 三層策略從乾淨表格學習。"
+                        "世界存檔保留；V9 戰略及軍備新結構重新學習，市場、聯盟與財政子策略保留。"
                     )
 
         except Exception as e:
@@ -7653,7 +7714,7 @@ def load_all_agents(country_list, file_path=None):
             # 只重置戰略層：市場價格／掛單量／聯盟 Q 值與舊動作統計保留。
             previous_policies = a_info.get("policies", {}) if isinstance(a_info, dict) else {}
             policy_data = {k: v for k, v in previous_policies.items()
-                           if k in ("market", "market_price", "market_size", "alliance")}
+                           if k in ("market", "market_price", "market_size", "alliance", "fiscal")}
             if policy_data:
                 print(f"🧠 [戰略狀態更新] {name}：戰略 Q 值重新學習；市場與聯盟子策略保留。")
 
@@ -7805,8 +7866,7 @@ WARSTATE = {
     # 每個國家最多同時參加 2 場正式戰爭。
     "MAX_ACTIVE_WARS_PER_COUNTRY": 2,
 
-    # 第二戰線不能再把同一批士兵完整算一次：
-    # 只有約 55% 現役兵力可視為第二戰線有效戰力。
+    # 僅保留於不再執行的舊即時戰鬥對照程式；V9持續戰爭以實際分配計算。
     "SECOND_FRONT_FORCE_MULTIPLIER": 0.55,
 
     # 新開第二戰線時，第一波遠征補給更昂貴。
@@ -7973,17 +8033,14 @@ def _war_front_number(country_key, war_id, active_wars):
 
 
 def _war_front_multiplier(country_key, war_id, active_wars):
-    return (
-        WARSTATE["SECOND_FRONT_FORCE_MULTIPLIER"]
-        if _war_front_number(country_key, war_id, active_wars) >= 2
-        else 1.0
-    )
+    """各戰線分配同一兵源池；本土防衛優先，總和不超過100%。"""
+    return war_strategy.front_share(country_key, war_id, active_wars)
 
 
 def _war_effective_soldiers(members, countries, war_id, active_wars):
     """
     計算某一條戰線真正可投入的有效兵力。
-    第一戰線=100%；第二戰線=55%。
+    每國所有戰線及行軍中的分配合計不超過100%。
     """
     total = 0
     for m in _war_live_members(members, countries):
@@ -8233,7 +8290,7 @@ def _war_second_front_upkeep(members, countries, war_id, active_wars):
         second_front_members += 1
         soldiers = max(0, int(countries[m].get("soldiers", 0) or 0))
         effective = int(
-            soldiers * WARSTATE["SECOND_FRONT_FORCE_MULTIPLIER"]
+            soldiers * _war_front_multiplier(m, war_id, active_wars)
         )
 
         world_upkeep_mult = float(
@@ -8276,13 +8333,9 @@ def _war_second_front_upkeep(members, countries, war_id, active_wars):
     return second_front_members, food_cost_total, metal_cost_total
 
 
-def _war_filter_members_for_new_front(members, active_wars):
-    """聯盟參戰時，已達兩線上限的盟友不再被強制拖入新戰爭。"""
-    return [
-        m
-        for m in (members or [])
-        if _war_country_can_join_new_war(m, active_wars)
-    ]
+def _war_filter_members_for_new_front(members, active_wars, countries=None, turn_counter=0):
+    return [m for m in (members or []) if _war_country_can_join_new_war(m, active_wars)
+            and (countries is None or not war_strategy.protected(countries[m], turn_counter))]
 
 
 def _war_pair_key(country_a, country_b):
@@ -8838,7 +8891,7 @@ def _war_resolve_capital_defeat(
     contribution_weights=None,
     attacker_name="",
 ):
-    """第一次重大戰敗先附庸；已曾臣服的政權再次失守才執行滅國。"""
+    """僅由合法攻陷呼叫；是否先附庸取決於 SUBJUGATION_BEFORE_ANNEXATION。"""
     loser = countries.get(loser_key, {})
     if int(loser.get("subjugation_count", 0) or 0) < SUBJUGATION_BEFORE_ANNEXATION:
         return (
@@ -8925,7 +8978,7 @@ def _war_apply_victory_benefits(war, winner_members, loser_members, countries):
 def _war_decide_surrender(war, attacker_members, defender_members, countries):
     """
     求和不是自動成功：先由防守方提出，再由進攻方依戰況決定接受或拒絕。
-    回傳 (accept, reason)。拒絕後由上層直接進入滅國結算，避免戰爭卡死。
+    回傳 (accept, reason)。拒絕後由上層執行國都陷落及直接滅國結算。
     """
     if not attacker_members or not defender_members:
         return False, "缺少有效參戰國"
@@ -9027,6 +9080,11 @@ def resolve_persistent_war_round(
     turn_counter,
     note_population_loss,
 ):
+    if war.get('v9_invalid_anchor') or any(war_strategy.protected(countries.get(war.get(side+'_anchor'), {}), turn_counter)
+                                              for side in ('attacker', 'defender')):
+        return {'ended': True, 'winner': None, 'reason': '受保護或失效目標撤銷戰爭，不結算佔領'}
+    war['planned_duration'] = max(3, min(war_strategy.MAX_COMBAT_YEARS, int(war.get('planned_duration', 8))))
+    war.setdefault('target_initial_soldiers', max(1, int(countries.get(war.get('defender_anchor'), {}).get('soldiers', 0))))
     att_members = _war_live_members(war.get("attacker_members"), countries)
     def_members = _war_live_members(war.get("defender_members"), countries)
     if not att_members:
@@ -9075,8 +9133,7 @@ def resolve_persistent_war_round(
             _clamp(float(countries[m].get("political_stability", 75) or 75) - 0.20, 0, 100)
         )
 
-    # 第二戰線不是把同一批軍隊再完整算一次。
-    # 第一戰線 100%；第二戰線僅以 55% 現役兵力計入此戰線。
+    # V9 各戰線分配同一兵源池，本土／盟友防禦優先於外征。
     att_member_forces = _war_effective_member_forces(
         att_members,
         countries,
@@ -9095,7 +9152,7 @@ def resolve_persistent_war_round(
     homeland_defense_bonus = _homeland_defense_bonus(att_s, def_s)
 
     # 每一回合都累積各國真正投入此戰線的有效兵力。
-    # 第二戰線已自動套用 55% 有效兵力，因此不會重複灌水。
+    # 已按同一兵源池分配有效兵力，不重複計入其他戰線或行軍部隊。
     _war_add_troop_contribution(
         war,
         "attacker_troop_contribution",
@@ -9261,84 +9318,14 @@ def resolve_persistent_war_round(
     def_ratio = cur_def / def_initial
     avg_fort = _war_avg_fort(def_members, countries)
 
-    # 空城失守規則：人口多寡不是城池能否繼續抵抗的理由，真正條件是
-    # 「仍有沒有守軍」與「城防還能撐多久」。無守軍時只允許短暫被動抵抗。
-    def_total_pop = sum(max(0, int(countries[m].get("pop_total", 0) or 0)) for m in def_members)
-    def_total_soldiers = _war_total_soldiers(def_members, countries)
-    if def_total_soldiers <= 0 and cur_att > 0:
-        war["undefended_siege_years"] = int(war.get("undefended_siege_years", 0) or 0) + 1
-        empty_city_falls = avg_fort <= UNDEFENDED_CAPITAL_FORT_THRESHOLD
-        siege_time_exhausted = (
-            int(war.get("undefended_siege_years", 0) or 0)
-            >= UNDEFENDED_MAX_SIEGE_YEARS
-        )
-        fall_reason = None
-        if empty_city_falls:
-            fall_reason = "守軍與城防均已歸零，國都當年陷落"
-        elif siege_time_exhausted:
-            fall_reason = f"守軍歸零後已孤城抵抗 {UNDEFENDED_MAX_SIEGE_YEARS} 年，國都陷落"
-
-        if fall_reason:
-            loser_key = war.get("defender_anchor")
-            if loser_key not in def_members:
-                loser_key = min(def_members, key=lambda m: countries[m].get("pop_total", 0))
-            defeat_result = _war_resolve_capital_defeat(
-                loser_key,
-                att_members,
-                countries,
-                note_population_loss,
-                turn_counter,
-                contribution_weights=war.get("attacker_troop_contribution", {}),
-                attacker_name=war.get("attacker_name", ""),
-            )
-            if defeat_result:
-                reason = (fall_reason + "，轉為附庸") if defeat_result == "SUBJUGATED" else fall_reason
-                return {"ended": True, "winner": "ATTACKER", "reason": reason}
-    else:
-        # 守軍補回或攻方已無兵時重新計算；避免不同階段的零散年份相加。
-        war["undefended_siege_years"] = 0
-
-    # 極小殘國的舊規則保留為保險，但正常情況會先由上述空城規則結算。
-    if def_total_soldiers <= 0 and def_total_pop <= 12 and round_no >= 2 and cur_att > 0:
-        loser_key = war.get("defender_anchor")
-        if loser_key not in def_members:
-            loser_key = min(def_members, key=lambda m: countries[m].get("pop_total", 0))
-        defeat_result = _war_resolve_capital_defeat(loser_key, att_members, countries, note_population_loss, turn_counter, contribution_weights=war.get("attacker_troop_contribution", {}), attacker_name=war.get("attacker_name", ""))
-        if defeat_result:
-            reason = "殘國已無軍隊，轉為附庸" if defeat_result == "SUBJUGATED" else "殘國再次失守，滅國"
-            return {"ended": True, "winner": "ATTACKER", "reason": reason}
-
-    # 國都陷落：不是人口死光，而是軍事與政權崩潰。
-    if (
-        int(war.get("defender_loss_streak", 0) or 0) >= WARSTATE["CAPITAL_LOSS_STREAK"]
-        and def_ratio <= WARSTATE["CAPITAL_SOLDIER_RATIO"]
-        and avg_fort < WARSTATE["CAPITAL_FORT"]
-    ):
-        advantage = cur_att / max(1, cur_def)
-        chance = WARSTATE["CAPITAL_CHANCE_MIN"] + min(0.20, max(0.0, advantage - 1.0) * 0.08)
-        chance = _clamp(chance, WARSTATE["CAPITAL_CHANCE_MIN"], WARSTATE["CAPITAL_CHANCE_MAX"])
-        if random.random() < chance:
-            loser_key = war.get("defender_anchor")
-            if loser_key not in def_members:
-                loser_key = min(def_members, key=lambda m: countries[m].get("soldiers", 0))
-            defeat_result = _war_resolve_capital_defeat(
-                loser_key,
-                att_members,
-                countries,
-                note_population_loss,
-                turn_counter,
-                contribution_weights=war.get(
-                    "attacker_troop_contribution",
-                    {},
-                ),
-                attacker_name=war.get(
-                    "attacker_name",
-                    "",
-                ),
-            )
-            if defeat_result:
-                reason = "國都陷落，轉為附庸" if defeat_result == "SUBJUGATED" else "國都再次陷落，滅國"
-                return {"ended": True, "winner": "ATTACKER", "reason": reason}
+    falls, fall_reason = war_strategy.capital_status(war, countries, turn_counter, cur_att, cur_def)
+    if falls:
+        result = _war_resolve_capital_defeat(
+            war['defender_anchor'], att_members, countries, note_population_loss, turn_counter,
+            contribution_weights=war.get('attacker_troop_contribution', {}), attacker_name=war.get('attacker_name', ''))
+        if result:
+            return {'ended': True, 'winner': 'ATTACKER',
+                    'reason': fall_reason + ('，轉為附庸' if result == 'SUBJUGATED' else '，政權滅亡')}
 
     # 至少 3 回合後才允許撤軍或求和
     if round_no >= 3:
@@ -9353,7 +9340,9 @@ def resolve_persistent_war_round(
                 war["confidence_defiance_year"] = turn_counter
                 print(f"🛡️ [共存亡]【{countries[confidence_anchor].get('display_name',confidence_anchor)}】"
                       f"利益認同、信任與革命情誼均高，拒絕求和並繼續並肩作戰；仍依正常戰敗規則結算。")
-        if def_ratio <= 0.40 and avg_fort < 30 and not confidence_defiant:
+        if (def_ratio <= 0.40 and avg_fort < 30 and not confidence_defiant
+                and turn_counter >= int(war.get('next_surrender_offer', 0))):
+            war['next_surrender_offer'] = turn_counter + 3
             # 防守方正式提出求和；進攻方自己判斷是否值得接受。
             accept_surrender, decision_reason = _war_decide_surrender(
                 war, att_members, def_members, countries
@@ -9370,22 +9359,19 @@ def resolve_persistent_war_round(
                 war["surrender_reparations"] = reparations
                 return {"ended": True, "winner": "ATTACKER", "reason": "防守方求和，進攻方接受"}
 
-            # 求和被拒絕後，不再讓弱國無限拖延：直接執行國都陷落／滅國。
-            loser_key = war.get("defender_anchor")
+            # V9_1：恢復求和被拒即國都陷落、直接亡國的規則。
+            loser_key = war.get('defender_anchor')
             if loser_key not in def_members:
-                loser_key = min(def_members, key=lambda m: countries[m].get("soldiers", 0))
-            defeat_result = _war_resolve_capital_defeat(
+                loser_key = min(def_members, key=lambda k: countries[k].get('soldiers', 0))
+            fallen = _war_execute_capital_fall(
                 loser_key, att_members, countries, note_population_loss, turn_counter,
-                contribution_weights=war.get("attacker_troop_contribution", {}),
-                attacker_name=war.get("attacker_name", ""),
-            )
-            if defeat_result:
-                print(
-                    f"☠️ [求和遭拒] {war_id}：【{att_name}】拒絕【{def_name}】求和，"
-                    f"進入主權結算。{decision_reason}。"
-                )
-                reason = "求和遭拒，轉為附庸" if defeat_result == "SUBJUGATED" else "求和遭拒，再次失守滅國"
-                return {"ended": True, "winner": "ATTACKER", "reason": reason}
+                contribution_weights=war.get('attacker_troop_contribution', {}),
+                attacker_name=war.get('attacker_name', ''))
+            if fallen:
+                war['last_surrender_result'] = '求和遭拒，國都淪陷並直接滅亡'
+                print(f"☠️ [求和遭拒] {war_id}：【{att_name}】拒絕【{def_name}】求和；"
+                      f"【{countries[loser_key].get('display_name', loser_key)}】國都淪陷並直接滅亡。{decision_reason}。")
+                return {'ended': True, 'winner': 'ATTACKER', 'reason': '求和遭拒，國都淪陷並直接滅亡'}
 
     if round_no >= int(war.get("planned_duration", WARSTATE["WAR_DURATION_MAX"]) or WARSTATE["WAR_DURATION_MAX"]):
         # 到期不再一律算和局。剩餘軍力、對手損耗、城防共同決定戰況。
@@ -9508,6 +9494,16 @@ def thread_stat_monitor():
     runtime_checkpoint_file = save_path("亂世演算_執行進度.json")
     runtime_progress_text_file = save_path("亂世演算_執行進度.txt")
 
+    if os.path.exists(countries_file) and not os.path.exists(save_path('v9_migration_complete.json')):
+        backup_dir = os.path.join(SAVES_DIR, 'pre_v9_world')
+        os.makedirs(backup_dir, exist_ok=True)
+        for source in (countries_file, alliances_file, q_tables_file, runtime_checkpoint_file):
+            if os.path.isfile(source):
+                destination = os.path.join(backup_dir, os.path.basename(source))
+                if not os.path.exists(destination):
+                    shutil.copy2(source, destination)
+        _atomic_write_json(save_path('v9_migration_complete.json'), {'version': 9, 'backup': 'pre_v9_world'})
+        print('📦 [V9升級備份] 已保存原始世界、聯盟、時間與大腦；新舊動作不混用。')
     # 資料結構初始化
     countries = {}
     alliances = {}
@@ -10083,6 +10079,7 @@ def thread_stat_monitor():
             data["season_phase"] = season_phase
             data["season_phase_name"] = season_phase_name
             data["season_progress"] = round(season_progress, 4)
+            data['season_years_remaining'] = max(0, YEARS_PER_SEASON - int(season_elapsed_years))
             world_bank["birth_policy_cost"] = policy_cost(BIRTH_POLICY_GOLD_COST, world_bank)
             data["policy_price_index"] = world_bank["policy_price_index"]
             data["currency_denomination"] = world_bank["currency_denomination"]
@@ -10156,6 +10153,7 @@ def thread_stat_monitor():
                 c_data["prev_power"] = c_data.get("power", 0)
 
                 econ_pop_before = int(c_data.get("pop_total", 0) or 0)
+                c_data['current_turn'] = turn_counter + 1
                 update_rts_economy_and_jobs(c_data, world_market)
                 econ_pop_after = int(c_data.get("pop_total", 0) or 0)
 
@@ -10185,6 +10183,7 @@ def thread_stat_monitor():
         for rank, country_key in enumerate(alive_sorted, 1):
             countries[country_key]["world_rank"] = rank
             countries[country_key]["top_three_contender"] = rank <= 3
+            countries[country_key]['champion_gap_ratio'] = max(0.0, (top_power - countries[country_key]['power']) / max(1, top_power))
             countries[country_key]["top_five_contender"] = rank <= LATE_SEASON_CONTENDER_COUNT
             countries[country_key]["championship_drive"] = (
                 "爭奪冠軍"
@@ -10481,6 +10480,11 @@ def thread_stat_monitor():
         # ============================================================
         # 5. 戰國模式：持續戰爭階段
         # ============================================================
+        war_strategy.prepare_year(V9_API, countries, alliances, rl_agents, active_wars,
+                                  turn_counter, note_population_loss)
+        for key, agent in rl_agents.items():
+            if key in countries:
+                military_strategy.settle(agent, countries[key], turn_counter)
         for war_id in list(active_wars.keys()):
             war = active_wars.get(war_id)
             if not isinstance(war, dict):
@@ -10597,6 +10601,7 @@ def thread_stat_monitor():
             countries[country_key]["world_rank"] = rank
             countries[country_key]["top_three_contender"] = rank <= 3
 
+        war_strategy.describe(V9_API, countries, active_wars, turn_counter)
         # 6. 主行動階段：RL Agent 決策與執行行動
         active_countries = []
         if len(alive_sorted) >= 2:
@@ -10650,6 +10655,11 @@ def thread_stat_monitor():
                 if live_members and live_members[0] not in active_countries:
                     active_countries.append(live_members[0])
 
+            # 所有被宣戰／交戰國至少每年取得一次主要決策，不額外刷多次。
+            for war in active_wars.values():
+                for key in war.get('attacker_members', []) + war.get('defender_members', []):
+                    if key in countries and countries[key].get('is_alive') and key not in active_countries:
+                        active_countries.append(key)
             attacked_this_round = set()  # 本輪已承受新宣戰的國家
             acted_this_round = set()  # 本輪已採取過行動的國家
 
@@ -11215,11 +11225,11 @@ def thread_stat_monitor():
 
                         att_entity["members"] = _war_filter_members_for_new_front(
                             att_entity.get("members", []),
-                            active_wars,
+                            active_wars, countries, turn_counter,
                         )
                         def_entity["members"] = _war_filter_members_for_new_front(
                             def_entity.get("members", []),
-                            active_wars,
+                            active_wars, countries, turn_counter,
                         )
 
                         # 主動宣戰國與被宣戰國本身必須仍有戰線名額。
@@ -12526,9 +12536,7 @@ def thread_stat_monitor():
                 # Action 6: 戰時動員
                 # ----------------------------------------------------
                 elif action == 6:
-                    c_data["military_target_ratio"] = float(
-                        _clamp(c_data.get("military_target_ratio", 0.30) + 0.04, 0.10, 0.50)
-                    )
+                    # 動員只訓練部隊；長期比例由獨立軍備策略調整。
                     pop = max(1, c_data["pop_total"])
                     soldiers = c_data["soldiers"]
                     farmers = c_data["farmers"]
@@ -12695,6 +12703,7 @@ def thread_stat_monitor():
                         and k not in my_members
                         and countries[k]["is_alive"]
                         and countries[k]["pop_total"] > 0
+                        and not war_strategy.protected(countries[k], turn_counter)
                         and not _is_capitulation_protected(countries[k], turn_counter)
                         and k not in attacked_this_round
                         and not _war_country_in_active_war(k, active_wars)
@@ -12803,9 +12812,9 @@ def thread_stat_monitor():
                 # Action 11: 裁軍休養
                 # ----------------------------------------------------
                 elif action == 11:
-                    c_data["military_target_ratio"] = float(
-                        _clamp(c_data.get("military_target_ratio", 0.30) - 0.10, 0.12, 0.50)
-                    )
+                    c_data['demobilize_after'] = turn_counter + 5
+                    c_data['military_rest_until'] = turn_counter + 5
+                    war_strategy.record(c_data, turn_counter, '短期退役', '本次有限退役，不改長期軍備比例')
                     soldiers = c_data.get("soldiers", 0)
                     if soldiers > 0:
                         # 裁軍改為漸進式：每次僅退伍約 5~10%，且最多 20 人。
@@ -12817,6 +12826,7 @@ def thread_stat_monitor():
                         )
                         c_data["soldiers"] -= demobilize
                         c_data["farmers"] += demobilize
+                        c_data['military_rest_ratio'] = c_data['soldiers'] / max(1, c_data['pop_total'])
                         # 退役不退還全部軍費，只回收少量可用裝備。
                         c_data["metal"] += int(demobilize * 0.5)
                         action_success = True
@@ -12828,6 +12838,11 @@ def thread_stat_monitor():
                 # ----------------------------------------------------
                 # Action 12: 鼓勵生育政策
                 # ----------------------------------------------------
+                elif action == 16:
+                    action_success = military_strategy.plan(agent, c_data, turn_counter)
+                    if action_success:
+                        print(f"🪖 [軍備規劃] 第{turn_counter}年【{c_data['display_name']}】{c_data['military_plan_reason']}。")
+
                 elif action == 12:
                     action_success, spent = _apply_birth_policy(c_data, world_bank)
                     if action_success:
@@ -12981,6 +12996,7 @@ def thread_stat_monitor():
                     action_success,
                 )
 
+        war_strategy.describe(V9_API, countries, active_wars, turn_counter)
         # V8_4 Layer B：市場子策略獨立決策，不再與國家戰略搶同一次 Action。
         # Disabled market state is normalized on load/startup; do not rewrite the same empty
         # order book and monitor every world year.
@@ -13193,6 +13209,10 @@ def thread_stat_monitor():
                         data["infamy"] = 0
                         data["fortification"] = 0
                         data["military_target_ratio"] = 0.30
+                        for field in ('military_plan_after', 'demobilize_after', 'front_redeploy_after',
+                                      'military_plan_reason', 'military_review_reward', 'military_rest_until', 'military_rest_ratio', 'battle_readiness',
+                                      'battle_readiness_text', 'last_strategy_reason', 'strategy_events'):
+                            data.pop(field, None)
                         data["balance_version"] = BALANCE_VERSION
                         data["famine_streak"] = 0
                         data["last_population_change_reason"] = ""
@@ -13808,6 +13828,7 @@ def thread_stat_monitor():
                     c_data["ai_decision_count"] = agent.decision_count
                     c_data["ai_epsilon"] = round(agent.strategic_policy.effective_epsilon(), 4)
                     c_data["q_state_count"] = len(agent.strategic_policy.q_table)
+                    c_data['military_q_state_count'] = len(agent.military_policy.q_table)
                     c_data["market_q_state_count"] = len(agent.market_policy.q_table)
                     c_data["alliance_q_state_count"] = len(agent.alliance_policy.q_table)
                     c_data["strategic_td_error"] = round(agent.strategic_policy.td_error_ema, 4)

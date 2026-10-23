@@ -11,7 +11,7 @@ from alliance_confidence import tenure_text
 import alliance_honors as honors
 
 try:
-    from 亂世演算_V8_8_4_精簡編年史與聯盟榮譽版 import (
+    from 亂世演算_V9_1_恢復拒和滅國版 import (
         thread_stat_monitor,
         toggle_simulation_paused,
         request_simulation_step,
@@ -26,12 +26,12 @@ except ModuleNotFoundError:
     # 下載同名版本可能被系統加上 (1)/(2)/(3)，啟動器自動載入同目錄最新引擎。
     pattern = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        "亂世演算_V8_8_4_精簡編年史與聯盟榮譽版*.py",
+        "亂世演算_V9_1_恢復拒和滅國版*.py",
     )
     candidates = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
     if not candidates:
         raise
-    spec = importlib.util.spec_from_file_location("亂世演算_v8_8_4_engine", candidates[0])
+    spec = importlib.util.spec_from_file_location("亂世演算_v9_engine", candidates[0])
     engine = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(engine)
     thread_stat_monitor = engine.thread_stat_monitor
@@ -52,7 +52,7 @@ except ModuleNotFoundError:
 # 1. 視窗與定時器設定
 # ------------------------------------------------------------------------------
 # 主視窗頂部標題列所顯示的文字名稱
-WINDOW_TITLE = "亂世演算_V8_8_4_精簡編年史與聯盟榮譽版"
+WINDOW_TITLE = "亂世演算_V9_1_1_聯盟自動切換版"
 
 # 應用程式啟動時的預設視窗解析度 (寬度x高度，單位：像素)
 WINDOW_SIZE = "1500x900"
@@ -772,8 +772,8 @@ class GameInterfaceUI:
 
         # 數值欄固定；只有「國家」欄吸收剩餘空間，右側不留白。
         for col, title, width, anchor in (
-            ("name",     "國家",  180, "w"),
-            ("rank",     "排名",  75, "center"),
+            ("name",     "國家",  120, "w"),
+            ("rank",     "排名",  100, "center"),
             ("power",    "戰力",  115, "center"),
             ("pop",      "人口",  105, "center"),
             # ("soldiers", "士兵",  145, "center"),
@@ -1918,6 +1918,36 @@ class GameInterfaceUI:
         if len(values) >= 2:
             messagebox.showinfo(str(values[0]), str(values[1]), parent=self.root)
 
+    def follow_watched_alliance(self):
+        """觀看中的聯盟消失時，改看當下戰力最高的存續聯盟。"""
+        selected_name = self.ally_cb.get()
+        if selected_name in self.raw_alliances_data:
+            return
+
+        # 聯盟資料採用剛讀取的當年快照，不沿用上一輪排行榜。
+        # 同戰力時按名稱固定排序，避免來回跳動；普通聯盟與臨時聯軍一併比較。
+        target = min(
+            self.raw_alliances_data,
+            key=lambda name: (
+                -float(self.raw_alliances_data[name].get("total_power", 0) or 0),
+                name,
+            ),
+            default="",
+        )
+        self.ally_cb.set(target)
+        if target:
+            return
+
+        # 全部聯盟都已解散時，清除舊資料；新盟出現後會再自動接續觀看。
+        self._last_alliance_log_owner = None
+        for tree in (
+            self.alliance_summary_tree,
+            self.alliance_member_tree,
+            self.alliance_war_tree,
+        ):
+            self._replace_tree_rows(tree, [])
+        self.load_specific_logs(self.ally_log_text, [], force_top=True)
+
     def on_alliance_selected(self, event=None):
         selected_name = self.ally_cb.get()
         if not selected_name or selected_name not in self.raw_alliances_data:
@@ -2643,7 +2673,7 @@ class GameInterfaceUI:
                 "重建保護",
                 (
                     f"尚餘 {max(0, max(int(c.get('rebuild_protection_until_turn', 0) or 0), int(c.get('newbie_protection_until_turn', 0) or 0)) - self.raw_turn_counter):,} 年"
-                    f"｜禁止攻擊、聯盟"
+                    f"｜不參戰、可結盟並以安全餘量援助"
                     if max(
                         int(c.get("rebuild_protection_until_turn", 0) or 0),
                         int(c.get("newbie_protection_until_turn", 0) or 0)
@@ -2673,6 +2703,10 @@ class GameInterfaceUI:
                 f"撤回 {int(c.get('war_assessment_cancellations', 0) or 0)} 次",
             ),
             ("防禦工事", f"{c.get('fortification', 0)} / 100"),
+            ("本戰兵力／補給／敵我", c.get('battle_readiness_text', '尚未評估')),
+            ("長期軍備目標", f"{float(c.get('military_target_ratio', .30)):.0%}｜{c.get('military_plan_reason', '尚未規劃')}"),
+            ("軍備學習回顧", f"{int(c.get('military_q_state_count', 0))} 種狀態｜五年回顧 {float(c.get('military_review_reward', 0)):+.3f}"),
+            ("最近調度原因", c.get('last_strategy_reason', '尚無調度')),
             (
                 "惡名 / 探索",
                 f"{c.get('infamy', 0)}｜"
@@ -3207,6 +3241,7 @@ class GameInterfaceUI:
                 elif page == "experience":
                     self.refresh_country_experience()
             elif selected_tab == str(self.tab_ally_detail):
+                self.follow_watched_alliance()
                 self.on_alliance_selected()
 
         except (json.JSONDecodeError, OSError) as e:
