@@ -9,9 +9,10 @@ import importlib.util
 from experience_view import render_current_q
 from alliance_confidence import tenure_text
 import alliance_honors as honors
+from library_reader import LibraryReaderMixin
 
 try:
-    from 亂世演算_V9_1_恢復拒和滅國版 import (
+    from 亂世演算_V10_世界圖書館與文明傳承版 import (
         thread_stat_monitor,
         toggle_simulation_paused,
         request_simulation_step,
@@ -26,7 +27,7 @@ except ModuleNotFoundError:
     # 下載同名版本可能被系統加上 (1)/(2)/(3)，啟動器自動載入同目錄最新引擎。
     pattern = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        "亂世演算_V9_1_恢復拒和滅國版*.py",
+        "亂世演算_V10_世界圖書館與文明傳承版*.py",
     )
     candidates = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
     if not candidates:
@@ -199,7 +200,7 @@ COL_WIDTH_ALLIANCE_TARGET = 80
 # ==============================================================================
 
 
-class GameInterfaceUI:
+class GameInterfaceUI(LibraryReaderMixin):
     def __init__(self, root):
         self.root = root
         self.root.title(WINDOW_TITLE)
@@ -1317,6 +1318,9 @@ class GameInterfaceUI:
         )
         for widget in self.entity_text_widgets:
             self.setup_entity_link_widget(widget)
+
+        self._library_file_path = save_path("world_library.json")
+        self.setup_world_library()
 
         # 1. 初始化排序狀態變數 (預設依戰力降冪)
         self.country_sort_state = ("power", True)
@@ -3050,6 +3054,8 @@ class GameInterfaceUI:
                 self.refresh_country_experience()
         elif selected == str(self.tab_ally_detail):
             self.on_alliance_selected()
+        elif selected == str(self.tab_library):
+            self.refresh_world_library()
         elif selected == str(self.tab_market):
             self.refresh_world_market_panel()
             self._market_panel_initialized = True
@@ -3240,6 +3246,8 @@ class GameInterfaceUI:
                     self.on_chronicle_country_selected()
                 elif page == "experience":
                     self.refresh_country_experience()
+            elif selected_tab == str(self.tab_library):
+                self.refresh_world_library()
             elif selected_tab == str(self.tab_ally_detail):
                 self.follow_watched_alliance()
                 self.on_alliance_selected()

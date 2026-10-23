@@ -14,6 +14,11 @@ import alliance_honors as honors
 import chronicle_retention as retention
 import military_strategy
 import war_strategy
+import world_library
+
+# V10 adds bounded shared experience; Q-state/action layouts remain V9-compatible.
+WORLD_LIBRARY_ENABLED = os.environ.get("亂世演算_LIBRARY_ENABLED", "1") != "0"
+library_runtime = None
 
 class _V9EngineAPI:
     def __getattr__(self, name):
@@ -32,7 +37,7 @@ last_sync_time = time.time()  # 紀錄最後同步時間點（初始化為當前
 world_stage_g = 0  # RL 世界力量階段：BALANCED / RISING / EMPIRE
 world_mode_g = "平常局勢"
 world_mode_code_g = "NORMAL"
-ENGINE_VERSION = "亂世演算_V9_1_恢復拒和滅國版"
+ENGINE_VERSION = "亂世演算_V10_世界圖書館與文明傳承版"
 
 # True：保留世界貨幣、市場與交易 AI；False：完整停用並改採混合資源政策成本。
 MARKET_ECONOMY_ENABLED = False
@@ -6569,7 +6574,7 @@ class ExpectedSarsaLambdaPolicy:
                 self.prune_count += 1
         return values
 
-    def choose(self, state, valid_actions=None):
+    def choose(self, state, valid_actions=None, advice=None):
         key = self.state_key(state)
         q_values = self._ensure(key)
         valid = [a for a in (valid_actions or range(self.action_size)) if 0 <= int(a) < self.action_size]
@@ -6578,11 +6583,16 @@ class ExpectedSarsaLambdaPolicy:
         self.decision_count += 1
         self.visit_counts[key] = max(0, int(self.visit_counts.get(key, 0) or 0)) + 1
         epsilon = self.effective_epsilon(key)
-        if random.random() < epsilon or max(q_values[a] for a in valid) - min(q_values[a] for a in valid) < 1e-12:
+        # Advice affects only this selection, never overwrites learned Q values or bypasses masks.
+        scores = [float(q) for q in q_values]
+        for a, bias in (advice or {}).items():
+            if a in valid and math.isfinite(float(bias)):
+                scores[a] += float(_clamp(bias, -world_library.BIAS_LIMIT, world_library.BIAS_LIMIT))
+        if random.random() < epsilon or max(scores[a] for a in valid) - min(scores[a] for a in valid) < 1e-12:
             action = random.choice(valid)
         else:
-            best = max(q_values[a] for a in valid)
-            action = random.choice([a for a in valid if abs(q_values[a] - best) < 1e-12])
+            best = max(scores[a] for a in valid)
+            action = random.choice([a for a in valid if abs(scores[a] - best) < 1e-12])
         self._last_state = tuple(state)
         self._last_action = int(action)
         self._last_epsilon = epsilon
@@ -7084,7 +7094,13 @@ class CountryRLAgent:
                 for idx, prior in ((2, .12), (12, .18)):
                     if idx in strategic_valid:
                         q_values[idx] = max(q_values[idx], prior)
-        strategic_action = self.strategic_policy.choose(state, strategic_valid)
+        self._last_library_advice = {}
+        self._last_library_snapshot = None
+        if library_runtime is not None and library_runtime.enabled:
+            year = int(country_data.get("current_turn", library_runtime.last_year + 1))
+            self._last_library_snapshot = world_library.snapshot(self.country_name, country_data, year, library_runtime.peers)
+            self._last_library_advice = library_runtime.advise(self.country_name, country_data, year, strategic_valid)
+        strategic_action = self.strategic_policy.choose(state, strategic_valid, advice=self._last_library_advice.get('bias'))
         engine_action = self._resolve_engine_action(strategic_action, engine_valid, country_data)
         self._last_fiscal_state = None
         self._last_fiscal_action = None
@@ -10063,6 +10079,11 @@ def thread_stat_monitor():
     confidence.sync_metadata(countries, alliances, alliance_confidence_meta, turn_counter)
     honors.synchronize(countries, alliances, alliance_confidence_meta, anti_hegemon_coalitions,
                        turn_counter, count_round, season_start_turn, YEARS_PER_SEASON)
+    global library_runtime
+    library_runtime = world_library.WorldLibrary(save_path("world_library.json"), enabled=WORLD_LIBRARY_ENABLED, printer=print)
+    library_runtime.load(turn_counter)
+    library_runtime.observe(countries, turn_counter, count_round, season_start_turn, max(0, YEARS_PER_SEASON - (turn_counter - season_start_turn)))
+    library_runtime.save(force=True)
     # 主遊戲運行迴圈 (Game Loop)
     while True:
         _wait_for_simulation_permission()
@@ -12959,6 +12980,16 @@ def thread_stat_monitor():
                     ),
                     action_success=action_success,
                 )
+                if library_runtime is not None and library_runtime.enabled:
+                    selected_strategy = agent._last_strategic_action
+                    actual_matches = action in STRATEGIC_TO_ENGINE_ACTIONS.get(selected_strategy, ())
+                    if selected_strategy == 7 and action in (3, 7, 12, 13):
+                        actual_matches = True
+                    if actual_matches and agent._last_library_snapshot is not None:
+                        library_runtime.record_decision(
+                            attacker_key, c_data, turn_counter, selected_strategy, action,
+                            action_success, agent._last_library_snapshot, agent._last_library_advice,
+                        )
                 if agent._last_fiscal_state is not None:
                     next_reserved, _ = (_market_order_reservations(world_market, attacker_key)
                                         if MARKET_ECONOMY_ENABLED else (0, {}))
@@ -13640,11 +13671,17 @@ def thread_stat_monitor():
         except Exception as e:
             print(f"⚠️ [排行榜存檔警告] {e}")
 
+        if library_runtime.enabled:
+            library_runtime.observe(countries, turn_counter, count_round, season_start_turn, season_remaining_years)
+
         # 屆期結算（先結算、再保存冠軍與聯盟榮譽） (達到 time_total 時間即進行本屆冠軍結算與新一屆重置)
         if (int(turn_counter) - int(season_start_turn)) >= YEARS_PER_SEASON:
             if sorted_countries:
                 champion_key, champion_data = sorted_countries[0]
                 champion_power = champion_data["power"]
+                if library_runtime.enabled:
+                    library_runtime.settle_season(champion_key, turn_counter, count_round)
+                    library_runtime.save(force=True)
 
                 # 屆末終局獎勵：冠軍遠高於亞軍、季軍與其他名次。
                 # 所有國家都收到排名結果，讓「爭取當屆第一」成為共同最終目標。
@@ -14051,6 +14088,9 @@ def thread_stat_monitor():
 
         except Exception as e:
             print(f"⚠️ [世界存檔警告] {e}")
+
+        if library_runtime.enabled:
+            library_runtime.save(force=bool(max_turns and turn_counter >= max_turns))
 
         # 本輪所有 LOG 統一落盤；Full GC 改為每 30 輪一次。
         flush_game_log(force=True)

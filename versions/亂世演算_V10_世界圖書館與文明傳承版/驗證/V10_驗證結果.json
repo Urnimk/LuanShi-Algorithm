@@ -1,0 +1,63 @@
+{
+  "tests": 94,
+  "disabled_500_world_rng_equal": true,
+  "runs": [
+    {
+      "name": "final_seed17",
+      "seed": 17,
+      "year": 1000,
+      "years_run": 1000,
+      "books": 29,
+      "shelves": {
+        "成長與復甦": 13,
+        "失敗與興亡": 14,
+        "冠軍成就": 2
+      },
+      "stats": {
+        "consultations": 3588,
+        "adoptions": 1552,
+        "reviews": 1552
+      },
+      "country_slots_that_studied": 100,
+      "library_bytes": 3542639
+    },
+    {
+      "name": "final_seed37",
+      "seed": 37,
+      "year": 1000,
+      "years_run": 1000,
+      "books": 38,
+      "shelves": {
+        "成長與復甦": 12,
+        "失敗與興亡": 24,
+        "冠軍成就": 2
+      },
+      "stats": {
+        "consultations": 3104,
+        "adoptions": 1820,
+        "reviews": 1812
+      },
+      "country_slots_that_studied": 100,
+      "library_bytes": 3617849
+    },
+    {
+      "name": "final_fixture1000",
+      "seed": 884,
+      "year": 145999,
+      "years_run": 1000,
+      "books": 41,
+      "shelves": {
+        "冠軍成就": 2,
+        "失敗與興亡": 28,
+        "成長與復甦": 11
+      },
+      "stats": {
+        "consultations": 3611,
+        "adoptions": 1842,
+        "reviews": 1816
+      },
+      "country_slots_that_studied": 100,
+      "library_bytes": 3687080
+    }
+  ]
+}
