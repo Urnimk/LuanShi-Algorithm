@@ -129,7 +129,7 @@ UNDEFENDED_SIEGE_ATTACKER_LOSS_RATE_CAP = _setting("UNDEFENDED_SIEGE_ATTACKER_LO
 UNDEFENDED_CAPITAL_FORT_THRESHOLD = _setting("UNDEFENDED_CAPITAL_FORT_THRESHOLD")  # 設定集中於 game_settings.py
 UNDEFENDED_MAX_SIEGE_YEARS = _setting("UNDEFENDED_MAX_SIEGE_YEARS")  # 設定集中於 game_settings.py
 
-ALLIANCE_NAME = {""}
+ALLIANCE_NAME = set()  # 現存聯盟與聯軍使用中的前綴；每年由實際盟約重建。
 
 
 # 所有執行期讀寫檔集中放在程式旁的 saves 資料夾。
@@ -2673,79 +2673,55 @@ def generate_country_names(n):
 
 def generate_awesome_alliance_name(is_anti_hegemon=False, target_name=""):
     global ALLIANCE_NAME
-    prefixes = [  # 聯盟名稱前綴庫
-        # 王權與霸業
-        "至高", "帝冠", "王座", "皇權", "霸業", "君臨", "天命", "天威",
-        "至尊", "不朽", "萬世", "永恆", "榮耀", "凱旋", "征服", "鐵血",
-        "雄獅", "龍威", "蒼龍", "黑龍", "金獅", "戰鷹", "鐵翼", "王者",
-
-        # 神話與審判
-        "神聖", "聖光", "聖焰", "聖盾", "神諭", "神罰", "天譴", "裁決",
-        "審判", "誓約", "守望", "救贖", "創世", "起源", "諸神", "泰坦",
-        "英靈", "戰神", "龍魂", "鳳凰", "涅槃", "命運", "真理", "秩序",
-
-        # 星辰與天象
-        "蒼穹", "星穹", "星辰", "群星", "繁星", "北辰", "天樞", "銀河",
-        "星海", "星隕", "極光", "曙光", "黎明", "破曉", "旭日", "烈日",
-        "日冕", "赤月", "新月", "月蝕", "日蝕", "長夜", "永夜", "天幕",
-
-        # 戰火與鋼鐵
-        "雷霆", "風暴", "烈焰", "烽火", "燎原", "赤焰", "熾火", "雷火",
-        "鋼鐵", "黑鐵", "玄鐵", "秘銀", "黑曜", "赤鋼", "鐵壁", "堅盾",
-        "利劍", "斷刃", "鋒芒", "戰歌", "軍魂", "先鋒", "鐵衛", "無畏",
-
-        # 山海與冰霜
-        "山河", "崑崙", "蒼岳", "群峰", "磐石", "巨岩", "滄海", "深海",
-        "怒濤", "狂瀾", "洪流", "寒潮", "凜冬", "冰封", "霜寒", "霜狼",
-        "北境", "荒原", "大漠", "長風", "凌霄", "飛雪", "玄冰", "蒼嵐",
-
-        # 暗影與終局
-        "暗影", "幽冥", "深淵", "黑潮", "暮光", "黃昏", "終焉", "末日",
-        "天啟", "浩劫", "劫火", "逆命", "破軍", "七殺", "無疆", "不滅",
-
-        # 團結與理想
-        "自由", "正義", "和平", "共和", "同心", "共榮", "復興", "希望",
-        "庇護", "守護", "忠誠", "堅毅", "眾志", "萬邦", "四海", "遠征",
-    ]
-
-    suffixes = [  # 聯盟名稱後綴庫
-        # 正式外交與政治組織
-        "同盟", "聯盟", "同盟會", "聯合會", "協約", "盟約", "公約", "憲章",
-        "協定", "議定書", "共同體", "協約組織", "同盟議會", "聯合議會",
-        "邦聯", "諸國同盟", "列國協約", "萬國議會", "共榮圈", "合作體系",
-
-        # 軍事與共同防衛
-        "戰線", "陣線", "聯合陣線", "防衛陣線", "共同防線", "聯合防線",
-        "防衛同盟", "軍事同盟", "戰略同盟", "聯防組織", "聯防協約",
-        "共同防衛體", "聯合司令部", "戰爭議會", "遠征同盟", "守望同盟",
-        "鐵壁", "壁壘", "戰團", "軍團", "禁衛軍", "先鋒軍",
-
-        # 誓言與史詩
-        "誓盟", "血盟", "聖盟", "王盟", "永誓", "誓約", "鐵誓", "血誓",
-        "聖約", "密約", "戰誓", "遠征誓約", "守護誓約", "不戰之約",
-        "兄弟會", "圓桌會", "守望者", "捍衛者", "征服者", "執劍者",
-
-        # 霸權與秩序
-        "王庭", "聖庭", "議庭", "樞密院", "最高議會", "統合體",
-        "霸權同盟", "秩序同盟", "戰略體系", "安全體系", "和平協約",
-        "復興同盟", "自由陣線", "解放戰線", "保衛同盟", "制衡同盟",
-    ]
-
-    
-    while(1):
-        temp_prefixes = random.choice(prefixes)
-        if temp_prefixes not in ALLIANCE_NAME:
-            break
-        else :
-            ALLIANCE_NAME.add(temp_prefixes)
-            temp_prefixes = random.choice(prefixes)
-
-
-    if is_anti_hegemon:  # 臨時反霸權聯軍
+    prefixes = _setting("ALLIANCE_NAME_PREFIXES")
+    suffixes = _setting("ALLIANCE_NAME_SUFFIXES")
+    if not prefixes or not suffixes:
+        raise ValueError("聯盟名稱前綴庫與後綴庫不可為空")
+    available = [prefix for prefix in prefixes if prefix not in ALLIANCE_NAME]
+    if available:
+        prefix = random.choice(available)
+    else:
+        # 前綴全部使用中時，產生擴充前綴；避免無限重抽或任意重複。
+        base = prefixes[0]
+        serial = 2
+        prefix = f"{base}{serial}"
+        while prefix in ALLIANCE_NAME:
+            serial += 1
+            prefix = f"{base}{serial}"
+    ALLIANCE_NAME.add(prefix)
+    body = prefix + random.choice(suffixes)
+    if is_anti_hegemon:
         target_tag = f"·反{target_name}" if target_name else "·反霸權"
-        return f"【<<{random.choice(prefixes)}{random.choice(suffixes)}{target_tag}>>】"
+        return f"【<<{body}{target_tag}>>】"
+    return f"【=={body}==】"
 
-    return f"【=={random.choice(prefixes)}{random.choice(suffixes)}==】"  # 一般同盟使用 == == 括號風格
+
+def _alliance_name_prefix(name):
+    """從完整盟名還原前綴；舊存檔名稱無須增加欄位。"""
+    if name.startswith("【==") and name.endswith("==】"):
+        body = name[3:-3]
+    elif name.startswith("【<<") and name.endswith(">>】"):
+        body = name[3:-3].split("·反", 1)[0]
+    else:
+        return None
+    # 最長後綴優先：避免「防衛同盟」被先當成「同盟」拆開。
+    for suffix in sorted(_setting("ALLIANCE_NAME_SUFFIXES"), key=len, reverse=True):
+        if suffix and body.endswith(suffix) and len(body) > len(suffix):
+            return body[:-len(suffix)]
+    # 名稱庫可能已更換；至少保留仍可辨識的已知前綴。
+    for prefix in sorted(_setting("ALLIANCE_NAME_PREFIXES"), key=len, reverse=True):
+        if prefix and body.startswith(prefix):
+            return prefix
+    return None
+
+
+def _sync_alliance_name_registry(alliances, coalitions):
+    """只保留現存聯盟／聯軍使用中的前綴，讀檔與每年更新共用。"""
+    ALLIANCE_NAME.clear()
+    for name in (*alliances, *coalitions):
+        prefix = _alliance_name_prefix(name)
+        if prefix:
+            ALLIANCE_NAME.add(prefix)
 
 
 def get_country_alliance(country_name, alliances):
@@ -9971,6 +9947,8 @@ def thread_stat_monitor():
     # 主遊戲運行迴圈 (Game Loop)
     while True:
         _wait_for_simulation_permission()
+        # 讀檔後亦以實際存續盟約重建，避免舊存檔缺登記或歷史名稱永久累積。
+        _sync_alliance_name_registry(alliances, anti_hegemon_coalitions)
         loop_started_at = time.monotonic()
         _war_index_rebuild(active_wars)
         _RECENT_ATTACKER_SET_CACHE.clear()
@@ -10309,7 +10287,6 @@ def thread_stat_monitor():
             else:
                 reason = "存活盟員不足兩國，盟約自然解散（非主動退盟）"
                 print(f"📜 [聯盟解散] 第{turn_counter}年 {ally_name}：{reason}。")
-                ALLIANCE_NAME.remove(ally_name)
                 confidence.journal(save_path("alliance_confidence_history.jsonl"),dict(
                     year=turn_counter,alliance=ally_name,decision=reason,members=members,
                     survivors=live_members))
