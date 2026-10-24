@@ -1,3 +1,4 @@
+from game_settings import get_setting as _setting
 import os
 import json
 import re
@@ -53,149 +54,149 @@ except ModuleNotFoundError:
 # 1. 視窗與定時器設定
 # ------------------------------------------------------------------------------
 # 主視窗頂部標題列所顯示的文字名稱
-WINDOW_TITLE = "亂世演算_V9_1_1_聯盟自動切換版"
+WINDOW_TITLE = _setting("WINDOW_TITLE")  # 設定集中於 game_settings.py
 
 # 應用程式啟動時的預設視窗解析度 (寬度x高度，單位：像素)
-WINDOW_SIZE = "1500x900"
+WINDOW_SIZE = _setting("WINDOW_SIZE")  # 設定集中於 game_settings.py
 
 # 背景 UI 定時器自動抓取檔案與刷新的時間間隔 (單位：毫秒，1500ms = 1.5 秒)
-REFRESH_INTERVAL_MS = 1000  # 畫面刷新獨立於模擬速度；高速模式仍每秒最多更新一次。
+REFRESH_INTERVAL_MS = _setting("REFRESH_INTERVAL_MS")  # 設定集中於 game_settings.py
 
 # 右下角「全域即時戰鬥 LOG」視窗最多讀取並顯示的最新日誌行數上限
-MAX_GLOBAL_LOG_LINES = 25
+MAX_GLOBAL_LOG_LINES = _setting("MAX_GLOBAL_LOG_LINES")  # 設定集中於 game_settings.py
 
 # 左側「國家詳細查詢」與「聯盟詳細查詢」分頁中，下方專屬 LOG 視窗顯示的歷史事件最大筆數
-MAX_SPECIFIC_LOG_LINES = 10
+MAX_SPECIFIC_LOG_LINES = _setting("MAX_SPECIFIC_LOG_LINES")  # 設定集中於 game_settings.py
 
 
 # ------------------------------------------------------------------------------
 # 2. 字型名稱與字體大小設定
 # ------------------------------------------------------------------------------
 # 介面主要文字與標籤使用的預設字體 family (微軟正黑體)
-FONT_FAMILY_MAIN = "Microsoft JhengHei"
+FONT_FAMILY_MAIN = _setting("FONT_FAMILY_MAIN")  # 設定集中於 game_settings.py
 
 # 排版需要等寬對齊時 (如世界即時排名) 所採用的 monospace 字體 family
-FONT_FAMILY_MONO = "Consolas"
+FONT_FAMILY_MONO = _setting("FONT_FAMILY_MONO")  # 設定集中於 game_settings.py
 
 
 # 下拉選單、提示標籤等通用 UI 元件的文字級階大小
-FONT_SIZE_UI = 12
+FONT_SIZE_UI = _setting("FONT_SIZE_UI")  # 設定集中於 game_settings.py
 
 # 表格 (Treeview) 頂部欄位標題與標題框 (LabelFrame) 的文字大小
-FONT_SIZE_HEADER = 12
+FONT_SIZE_HEADER = _setting("FONT_SIZE_HEADER")  # 設定集中於 game_settings.py
 
 # 國家與聯盟詳細資訊文本框 (Text Area) 內部內文的文字大小
-FONT_SIZE_DETAIL = 12
+FONT_SIZE_DETAIL = _setting("FONT_SIZE_DETAIL")  # 設定集中於 game_settings.py
 
 # 右上角世界即時排名列表區塊的文字大小
-FONT_SIZE_RANK = 12
+FONT_SIZE_RANK = _setting("FONT_SIZE_RANK")  # 設定集中於 game_settings.py
 
 # 所有事件日誌 (LOG) 區域的文字大小
-FONT_SIZE_LOG = 12
+FONT_SIZE_LOG = _setting("FONT_SIZE_LOG")  # 設定集中於 game_settings.py
 
 # 國家與聯盟詳細資訊欄位內容字體大小
-CONFIGURE_FONT = 14
+CONFIGURE_FONT = _setting("CONFIGURE_FONT")  # 設定集中於 game_settings.py
 
 
 # 封裝一般 UI 元件使用的標準字型設定 (字體, 字號)
-FONT_UI_NORMAL = (FONT_FAMILY_MAIN, FONT_SIZE_UI)
+FONT_UI_NORMAL = _setting("FONT_UI_NORMAL")  # 設定集中於 game_settings.py
 
 # 封裝一般 UI 元件使用的粗體字型設定 (字體, 字號, 粗體)
-FONT_UI_BOLD = (FONT_FAMILY_MAIN, FONT_SIZE_UI, "bold")
+FONT_UI_BOLD = _setting("FONT_UI_BOLD")  # 設定集中於 game_settings.py
 
 # 封裝標題欄位與區塊標題使用的粗體字型設定
-FONT_HEADER_BOLD = (FONT_FAMILY_MAIN, FONT_SIZE_HEADER, "bold")
+FONT_HEADER_BOLD = _setting("FONT_HEADER_BOLD")  # 設定集中於 game_settings.py
 
 # 封裝詳細查詢內文區域使用的標準字型設定
-FONT_DETAIL_TEXT = (FONT_FAMILY_MAIN, FONT_SIZE_DETAIL)
+FONT_DETAIL_TEXT = _setting("FONT_DETAIL_TEXT")  # 設定集中於 game_settings.py
 
 # 封裝世界排名文字區塊使用的等寬字型設定
-FONT_RANK_MONO = (FONT_FAMILY_MONO, FONT_SIZE_RANK)
+FONT_RANK_MONO = _setting("FONT_RANK_MONO")  # 設定集中於 game_settings.py
 
 # 封裝事件日誌區域使用的標準字型設定
-FONT_LOG_TEXT = (FONT_FAMILY_MAIN, FONT_SIZE_LOG)
+FONT_LOG_TEXT = _setting("FONT_LOG_TEXT")  # 設定集中於 game_settings.py
 
 # 封裝事件日誌區域內部重點高亮使用的粗體字型設定
-FONT_LOG_BOLD = (FONT_FAMILY_MAIN, FONT_SIZE_LOG, "bold")
+FONT_LOG_BOLD = _setting("FONT_LOG_BOLD")  # 設定集中於 game_settings.py
 
 
 # ------------------------------------------------------------------------------
 # 3. 顏色主題設定 (十六進位 RGB 顏色碼)
 # ------------------------------------------------------------------------------
 # 主視窗與大多數容器背景的底色 (深灰近黑)
-COLOR_BG_MAIN = "#1E1E1E"
+COLOR_BG_MAIN = _setting("COLOR_BG_MAIN")  # 設定集中於 game_settings.py
 
 # 事件 LOG 輸入框等更深層區塊的背景顏色 (極深灰)
-COLOR_BG_DARK = "#181818"
+COLOR_BG_DARK = _setting("COLOR_BG_DARK")  # 設定集中於 game_settings.py
 
 # 文本輸入框、列表格 (Treeview) 與下拉選單等數據展示區的背景色 (暗灰)
-COLOR_BG_FIELD = "#252526"
+COLOR_BG_FIELD = _setting("COLOR_BG_FIELD")  # 設定集中於 game_settings.py
 
 # 左側分頁標籤 (Notebook Tab) 未選取時的背景顏色
-COLOR_BG_TAB = "#2D2D2D"
+COLOR_BG_TAB = _setting("COLOR_BG_TAB")  # 設定集中於 game_settings.py
 
 # 左側分頁標籤 (Notebook Tab) 當前被選中時的高亮背景顏色 (經典 VSCode 藍)
-COLOR_BG_TAB_ACTIVE = "#007ACC"
+COLOR_BG_TAB_ACTIVE = _setting("COLOR_BG_TAB_ACTIVE")  # 設定集中於 game_settings.py
 
 # 表格 (Treeview) 頂部欄位 Header 的背景顏色
-COLOR_BG_HEADER = "#333333"
+COLOR_BG_HEADER = _setting("COLOR_BG_HEADER")  # 設定集中於 game_settings.py
 
 
 # 一般主要標題與高亮文字的文字顏色 (純白)
-COLOR_FG_WHITE = "#FFFFFF"
+COLOR_FG_WHITE = _setting("COLOR_FG_WHITE")  # 設定集中於 game_settings.py
 
 # 未選中的分頁頁籤或次要內容的文字顏色 (淺灰)
-COLOR_FG_MUTED = "#CCCCCC"
+COLOR_FG_MUTED = _setting("COLOR_FG_MUTED")  # 設定集中於 game_settings.py
 
 # 標準內文與一般日誌文字的預設前景色 (灰白)
-COLOR_FG_TEXT = "#D4D4D4"
+COLOR_FG_TEXT = _setting("COLOR_FG_TEXT")  # 設定集中於 game_settings.py
 
 # 世界即時排名內文的預設前景色 (明亮灰)
-COLOR_FG_RANK = "#DCDCDC"
+COLOR_FG_RANK = _setting("COLOR_FG_RANK")  # 設定集中於 game_settings.py
 
 # 區塊外框標題與重點強調標籤的前景色 (天藍)
-COLOR_FG_ACCENT = "#007ACC"
+COLOR_FG_ACCENT = _setting("COLOR_FG_ACCENT")  # 設定集中於 game_settings.py
 
 # 世界排名中標示聯盟名稱高亮的前景色 (明亮黃)
-COLOR_FG_YELLOW = "#FFE066"
+COLOR_FG_YELLOW = _setting("COLOR_FG_YELLOW")  # 設定集中於 game_settings.py
 
 
 # ------------------------------------------------------------------------------
 # 4. 表格欄位寬度設定 (單位：像素)
 # ------------------------------------------------------------------------------
 # 國家總覽列表中，「國家名稱」欄位的預設顯示寬度
-COL_WIDTH_COUNTRY_NAME = 120
+COL_WIDTH_COUNTRY_NAME = _setting("COL_WIDTH_COUNTRY_NAME")  # 設定集中於 game_settings.py
 
 # 國家總覽列表中，「世代」欄位的預設顯示寬度
-COL_WIDTH_COUNTRY_GEN = 50
+COL_WIDTH_COUNTRY_GEN = _setting("COL_WIDTH_COUNTRY_GEN")  # 設定集中於 game_settings.py
 
 # 國家總覽列表中，「戰力」欄位的預設顯示寬度
-COL_WIDTH_COUNTRY_POWER = 80
+COL_WIDTH_COUNTRY_POWER = _setting("COL_WIDTH_COUNTRY_POWER")  # 設定集中於 game_settings.py
 
 # 國家總覽列表中，「總人口」欄位的預設顯示寬度
-COL_WIDTH_COUNTRY_POP = 70
+COL_WIDTH_COUNTRY_POP = _setting("COL_WIDTH_COUNTRY_POP")  # 設定集中於 game_settings.py
 
 # 國家總覽列表中，「士兵」欄位的預設顯示寬度
-COL_WIDTH_COUNTRY_SOLDIERS = 60
+COL_WIDTH_COUNTRY_SOLDIERS = _setting("COL_WIDTH_COUNTRY_SOLDIERS")  # 設定集中於 game_settings.py
 
 # 國家總覽列表中，「糧草」欄位的預設顯示寬度
-COL_WIDTH_COUNTRY_FOOD = 70
+COL_WIDTH_COUNTRY_FOOD = _setting("COL_WIDTH_COUNTRY_FOOD")  # 設定集中於 game_settings.py
 
 # 國家總覽列表中，「狀態 (存活/滅亡)」欄位的預設顯示寬度
-COL_WIDTH_COUNTRY_STATUS = 210
+COL_WIDTH_COUNTRY_STATUS = _setting("COL_WIDTH_COUNTRY_STATUS")  # 設定集中於 game_settings.py
 
 
 # 聯盟總覽列表中，「聯盟名稱」欄位的預設顯示寬度
-COL_WIDTH_ALLIANCE_NAME = 150
+COL_WIDTH_ALLIANCE_NAME = _setting("COL_WIDTH_ALLIANCE_NAME")  # 設定集中於 game_settings.py
 
 # 聯盟總覽列表中，「總戰力」欄位的預設顯示寬度
-COL_WIDTH_ALLIANCE_POWER = 90
+COL_WIDTH_ALLIANCE_POWER = _setting("COL_WIDTH_ALLIANCE_POWER")  # 設定集中於 game_settings.py
 
 # 聯盟總覽列表中，「成員數量」欄位的預設顯示寬度
-COL_WIDTH_ALLIANCE_MEMBERS = 80
+COL_WIDTH_ALLIANCE_MEMBERS = _setting("COL_WIDTH_ALLIANCE_MEMBERS")  # 設定集中於 game_settings.py
 
 # 聯盟總覽列表中，「圍剿目標」欄位的預設顯示寬度
-COL_WIDTH_ALLIANCE_TARGET = 80
+COL_WIDTH_ALLIANCE_TARGET = _setting("COL_WIDTH_ALLIANCE_TARGET")  # 設定集中於 game_settings.py
 
 # ==============================================================================
 

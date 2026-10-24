@@ -1,11 +1,12 @@
 """V9 戰線調度。所有變更沿用引擎人口、戰爭索引與盟約資料；不改排名。"""
-MAX_COMBAT_YEARS = 30
-OCCUPATION_YEARS = 3
-CAPTURE_SOLDIER_RATIO = .25
-CAPTURE_FORT = 25
-EMPTY_CITY_MAX_YEARS = 10
-REVIEW_INTERVAL = 5
-REINFORCEMENT_TRAVEL = 2
+from game_settings import get_setting as _setting
+MAX_COMBAT_YEARS = _setting("WAR_STRATEGY_MAX_COMBAT_YEARS")  # 設定集中於 game_settings.py
+OCCUPATION_YEARS = _setting("WAR_STRATEGY_OCCUPATION_YEARS")  # 設定集中於 game_settings.py
+CAPTURE_SOLDIER_RATIO = _setting("WAR_STRATEGY_CAPTURE_SOLDIER_RATIO")  # 設定集中於 game_settings.py
+CAPTURE_FORT = _setting("WAR_STRATEGY_CAPTURE_FORT")  # 設定集中於 game_settings.py
+EMPTY_CITY_MAX_YEARS = _setting("WAR_STRATEGY_EMPTY_CITY_MAX_YEARS")  # 設定集中於 game_settings.py
+REVIEW_INTERVAL = _setting("WAR_STRATEGY_REVIEW_INTERVAL")  # 設定集中於 game_settings.py
+REINFORCEMENT_TRAVEL = _setting("WAR_STRATEGY_REINFORCEMENT_TRAVEL")  # 設定集中於 game_settings.py
 
 
 def protected(c, year):

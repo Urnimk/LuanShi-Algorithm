@@ -4,6 +4,7 @@
 用途：將 rl_agents_q_tables.json 中某國的 RL 學習資料複製給另一國。
 不需要第三方套件。執行前請先關閉《亂世演算》，避免遊戲同時寫入檔案。
 """
+from game_settings import get_setting as _setting
 
 import copy
 import json
@@ -12,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-DEFAULT_FILENAME = "rl_agents_q_tables.json"
+DEFAULT_FILENAME = _setting("BRAIN_DEFAULT_FILENAME")  # 設定集中於 game_settings.py
 
 
 def choose_file():

@@ -1,4 +1,5 @@
 """Observed history and small, contextual policy advice. No fabricated historical backfill."""
+from game_settings import get_setting as _setting
 import copy
 import json
 import math
@@ -10,16 +11,16 @@ SCHEMA=3
 LEARNING_MODEL=paths.MODEL
 EVIDENCE_EDITION=2
 RULES='V10-library1:power=soldiers*50:refused-peace=capital-fall'
-MAX_BOOKS=100
-MAX_CASES=24
-MAX_TRACK_POINTS=32
-MAX_BOOK_POINTS=24
-MAX_READINGS=200
-MAX_COUNTRIES=200
-REVIEW_YEARS=200
-CASE_YEARS=15
-CONSULT_COOLDOWN=25
-BIAS_LIMIT=.18
+MAX_BOOKS = _setting("LIBRARY_MAX_BOOKS")  # 設定集中於 game_settings.py
+MAX_CASES = _setting("LIBRARY_MAX_CASES")  # 設定集中於 game_settings.py
+MAX_TRACK_POINTS = _setting("LIBRARY_MAX_TRACK_POINTS")  # 設定集中於 game_settings.py
+MAX_BOOK_POINTS = _setting("LIBRARY_MAX_BOOK_POINTS")  # 設定集中於 game_settings.py
+MAX_READINGS = _setting("LIBRARY_MAX_READINGS")  # 設定集中於 game_settings.py
+MAX_COUNTRIES = _setting("LIBRARY_MAX_COUNTRIES")  # 設定集中於 game_settings.py
+REVIEW_YEARS = _setting("LIBRARY_REVIEW_YEARS")  # 設定集中於 game_settings.py
+CASE_YEARS = _setting("LIBRARY_CASE_YEARS")  # 設定集中於 game_settings.py
+CONSULT_COOLDOWN = _setting("LIBRARY_CONSULT_COOLDOWN")  # 設定集中於 game_settings.py
+BIAS_LIMIT = _setting("LIBRARY_BIAS_LIMIT")  # 設定集中於 game_settings.py
 ACTION_NAMES={0:'基礎建設投資',1:'產業配置',2:'戰時動員',3:'防禦工事',4:'結盟與共同防禦',5:'主動戰爭',6:'有限襲擾',7:'人口與生產政策',8:'反霸權圍剿',9:'背叛與機會主義',10:'聲望與外交修復',11:'短期裁軍休養',12:'長期軍備規劃'}
 ENGINE_NAMES={0:'發動戰爭',1:'締結同盟',2:'號召圍剿',3:'基礎建設投資',4:'背叛背刺',5:'加固防線',6:'戰時動員',7:'調整產業配置',8:'市場貿易',9:'修復聲望',10:'小規模襲擾',11:'裁軍休養',12:'鼓勵生育',13:'增產補貼',16:'長期軍備規劃'}
 
@@ -86,6 +87,7 @@ class WorldLibrary:
         self.histories={};self.books=[];self.tracks={};self.completed={};self.pending={};self.adoptions={};self.cooldowns={};self.capture_after={};self.readings=[];self.case_feedback={}
         self.last_year=0;self.seq=0;self.revision=0;self.peers={};self.index={};self.dirty=False;self.error='';self.stats={'consultations':0,'adoptions':0,'reviews':0}
     def load(self,year):
+        if not self.enabled:return
         try:
             if os.path.getsize(self.path)>20_000_000:raise ValueError('圖書館超過20MB讀取上限')
             with open(self.path,encoding='utf-8') as f:data=json.load(f)
@@ -113,7 +115,7 @@ class WorldLibrary:
                 if key not in current:table.pop(key,None)
     def _bound(self):
         # Diverse shelves; newest records replace older records within the same kind.
-        caps={'冠軍成就':40,'成長與復甦':28,'失敗與興亡':32}
+        caps=_setting('LIBRARY_SHELF_CAPS')
         keep=[]
         for kind,cap in caps.items():
             shelf=[b for b in self.books if b.get('kind')==kind]
@@ -409,6 +411,7 @@ class WorldLibrary:
         self.readings.append(dict(year=s['year'],country=key,name=p['before']['name'],book_id=p['book_id'],kind='回顧',learning_model=LEARNING_MODEL,score=score,text=text));self.readings=self.readings[-MAX_READINGS:]
         self.printer('🧠 [研習回顧] '+text);self.stats['reviews']+=1;self.adoptions.pop(key,None);self.revision+=1;self.dirty=True
     def settle_season(self,key,year,season):
+        if not self.enabled:return
         champion=None
         t=self.tracks.get(key)
         if t and t['last']['alive']:

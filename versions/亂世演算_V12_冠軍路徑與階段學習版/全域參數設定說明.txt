@@ -1,0 +1,51 @@
+V12 全域參數集中設定說明
+
+【要改哪個檔案】
+只需使用記事本或程式編輯器修改 game_settings.py，儲存後關閉遊戲並重新啟動。
+檔名沿用既有的複數 game_settings.py。版本仍是V12，啟動檔與saves位置不變。
+本次集中移植各模組原本的全域調整參數，不將所有函式內公式常數改成新選項。
+原本的圖書館開關仍預設False；所有平衡、字型、速度與容量預設值維持移植前數值。
+
+【常用搜尋名稱】
+WORLD_LIBRARY_ENABLED：世界圖書館啟用／關閉。
+SECONDS_PER_YEAR：預設每年幾秒；執行中的速度控制及環境變數可覆蓋。
+ALLIANCE_MAX_MEMBERS：普通聯盟最大成員數。
+REBUILD_PROTECTION_YEARS：重建保護期年數。
+FONT_SIZE_UI、FONT_SIZE_LOG、WINDOW_SIZE：字體大小、LOG字體與視窗大小。
+MAX_LOG_LINES：game.log行數上限。
+ALLIANCE_CONFIDENCE_JOURNAL_RETENTION_YEARS：聯盟信心詳細紀錄保留年數。
+CHRONICLE_GENERATION_LIMIT：各國編年史保留最近幾代。
+LIBRARY_REVIEW_YEARS：讀書後回顧年數；不是聯盟信心評估週期。
+ALLIANCE_CONFIDENCE_REVIEW_YEARS：聯盟信心每隔幾年評估；與讀書回顧各自獨立。
+MILITARY_STEP、MILITARY_COOLDOWN：軍備目標每次調整幅度、規劃冷卻。
+RL_BASE_EPSILON、RL_GAMMA、RL_LAMBDA：AI探索與學習參數。
+BALANCE：人口、資源、生產、徵兵、消耗及初始資產設定表。
+WARSTATE：戰爭、雙線成本、敵意與休戰設定表。
+
+【怎麼看設定檔】
+依功能分區；每項有中文用途與原始引用名稱，BALANCE/WARSTATE各鍵也有用途註解。
+比例通常是0至1：0.03代表3%，不是3；每項時間另標註秒、毫秒、回合或世界年。
+同名參數加了模組前綴，避免誤改另一套系統：LIBRARY_、ALLIANCE_CONFIDENCE_、
+MILITARY_、WAR_STRATEGY_、CHRONICLE_、BRAIN_。
+衍生值依設定檔中的公式重算，例如每屆秒數、字型組合、貨幣倍率相關成本。
+通常改上方的基本值即可，不用逐項修改下方的衍生值。
+
+圖書館藏書上限由LIBRARY_MAX_BOOKS與LIBRARY_SHELF_CAPS共同限制；
+想增加某類書籍，需同時確保總上限與該類書架配額足夠。
+目前圖書館仍採500年百年分期模板；YEARS_PER_SEASON屬進階設定，
+變更屆長前請關閉圖書館，不要將調整時間常數當成完整改寫學習模板。
+本版按每回合一年運行，YEARS_PER_TURN維持1。
+
+有些舊參數目前未被主流程引用，已明確標示「相容設定，修改不改變現行行為」。
+存檔格式版本、Q表結構、行動編碼與執行中的國家狀態／快取不屬於調整選項，留在原模組。
+既有存檔的國家資產、已發生事件及當前貨幣狀態不會因為修改「初始值」而重新生成。
+
+【升級】
+關閉舊版；將舊版整個saves資料夾複製到本版的同名程式目錄旁，再啟動原名稱的啟動.py。
+不需重置Q表，不更改圖書館schema或國家存檔架構。
+圖書館關閉仍不讀寫舊書籍，聯盟信心紀錄仍維持最近1000年。
+
+【檢查與限制】
+逐項核對移植參數預設值；測試實際修改設定檔後的引擎、介面及子模組取值。
+同種子250年世界與隨機狀態對照結果，以及完整自動測試見驗證資料夾。
+Windows Tk視窗未實機點擊驗證；介面字型與設定連動由程式載入測試確認。

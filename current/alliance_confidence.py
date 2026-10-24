@@ -4,14 +4,15 @@ Benefit, trust and comradeship are separate. Tenure alone cannot create a
 life-and-death pact. Events observe real transfers and effective battle forces.
 No random calls, Q-state changes or combat/resource formula changes.
 """
+from game_settings import get_setting as _setting
 import math
 
-REVIEW_YEARS = 10
-LOW_CONFIDENCE = 35
-LOW_REVIEWS = 3
-MIN_TENURE = 40
-NOTICE_YEARS = 10
-COOLDOWN_YEARS = 30
+REVIEW_YEARS = _setting("ALLIANCE_CONFIDENCE_REVIEW_YEARS")  # 設定集中於 game_settings.py
+LOW_CONFIDENCE = _setting("ALLIANCE_CONFIDENCE_LOW_CONFIDENCE")  # 設定集中於 game_settings.py
+LOW_REVIEWS = _setting("ALLIANCE_CONFIDENCE_LOW_REVIEWS")  # 設定集中於 game_settings.py
+MIN_TENURE = _setting("ALLIANCE_CONFIDENCE_MIN_TENURE")  # 設定集中於 game_settings.py
+NOTICE_YEARS = _setting("ALLIANCE_CONFIDENCE_NOTICE_YEARS")  # 設定集中於 game_settings.py
+COOLDOWN_YEARS = _setting("ALLIANCE_CONFIDENCE_COOLDOWN_YEARS")  # 設定集中於 game_settings.py
 
 
 def clamp(x, lo=0.0, hi=100.0):
@@ -46,7 +47,7 @@ def sync(c, year):
     return s
 
 
-JOURNAL_RETENTION_YEARS = 1000
+JOURNAL_RETENTION_YEARS = _setting("ALLIANCE_CONFIDENCE_JOURNAL_RETENTION_YEARS")  # 設定集中於 game_settings.py
 _journal_state = {}
 
 

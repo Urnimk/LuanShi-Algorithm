@@ -1,8 +1,9 @@
 """V9 有界軍備子策略：估算可持續目標、調整冷卻、五年後回顧。"""
+from game_settings import get_setting as _setting
 from war_strategy import record
-TARGETS = (.18, .25, .30, .36, .42, .48)
-STEP = .03
-COOLDOWN = 5
+TARGETS = _setting("MILITARY_TARGETS")  # 設定集中於 game_settings.py
+STEP = _setting("MILITARY_STEP")  # 設定集中於 game_settings.py
+COOLDOWN = _setting("MILITARY_COOLDOWN")  # 設定集中於 game_settings.py
 
 
 def phase(c):

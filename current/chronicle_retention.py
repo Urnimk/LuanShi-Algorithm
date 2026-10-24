@@ -1,8 +1,9 @@
 """Keep only the latest 50 generations, with constant-size all-time records."""
+from game_settings import get_setting as _setting
 from pathlib import Path
 import shutil
 
-GENERATION_LIMIT = 50
+GENERATION_LIMIT = _setting("CHRONICLE_GENERATION_LIMIT")  # 設定集中於 game_settings.py
 
 
 def trim(country, limit=GENERATION_LIMIT):

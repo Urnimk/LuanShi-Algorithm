@@ -4,6 +4,7 @@ import json
 import os
 from collections import Counter
 import library_paths as paths
+from game_settings import world_library_enabled
 from world_library import ACTION_NAMES,RULES,SCHEMA,REVIEW_YEARS,MAX_BOOKS,EVIDENCE_EDITION
 
 GUIDE=f'''世界圖書館｜閱讀說明
@@ -161,6 +162,8 @@ def render_html(books,readings=(),title='世界圖書館｜文明留下的經驗
 
 class LibraryReaderMixin:
     def setup_world_library(self):
+        self.tab_library=None
+        if not world_library_enabled():return
         import tkinter as tk
         from tkinter import ttk,scrolledtext
         self.tab_library=ttk.Frame(self.left_notebook);self.left_notebook.add(self.tab_library,text=' 📚 世界圖書館 ')
@@ -193,6 +196,7 @@ class LibraryReaderMixin:
     def resize_library_font(self,amount):
         self._library_font_size=max(10,min(24,self._library_font_size+amount));self.library_text.configure(font=('Microsoft JhengHei',self._library_font_size));self.library_text.tag_configure('heading',font=('Microsoft JhengHei',self._library_font_size+2,'bold'))
     def refresh_world_library(self,force=False):
+        if not world_library_enabled():return
         path=self._library_file_path
         try:
             stat=os.stat(path);stamp=(stat.st_mtime_ns,stat.st_size)

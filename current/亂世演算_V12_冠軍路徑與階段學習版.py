@@ -1,3 +1,4 @@
+from game_settings import get_setting as _setting
 import json  # 匯入 JSON 模組，用於讀取與儲存 JSON 格式的檔案（例如國家資料、 Q-Table 檔案）
 import math  # 匯入數學模組，用於無條件進位（math.ceil）等計算
 import os  # 匯入作業系統模組，用於檢查檔案或路徑是否存在
@@ -15,9 +16,10 @@ import chronicle_retention as retention
 import military_strategy
 import war_strategy
 import world_library
+from game_settings import world_library_enabled
 
 # V10 adds bounded shared experience; Q-state/action layouts remain V9-compatible.
-WORLD_LIBRARY_ENABLED = os.environ.get("亂世演算_LIBRARY_ENABLED", "1") != "0"
+WORLD_LIBRARY_ENABLED = world_library_enabled()
 library_runtime = None
 
 class _V9EngineAPI:
@@ -40,97 +42,94 @@ world_mode_code_g = "NORMAL"
 ENGINE_VERSION = "亂世演算_V12_冠軍路徑與階段學習版"
 
 # True：保留世界貨幣、市場與交易 AI；False：完整停用並改採混合資源政策成本。
-MARKET_ECONOMY_ENABLED = False
-RESOURCE_POLICY_COST_RATE = 0.10
+MARKET_ECONOMY_ENABLED = _setting("MARKET_ECONOMY_ENABLED")  # 設定集中於 game_settings.py
+RESOURCE_POLICY_COST_RATE = _setting("RESOURCE_POLICY_COST_RATE")  # 設定集中於 game_settings.py
 
 # ============================================================================
 # 【世界時間與屆期參數】所有時間顯示與結算只以這裡為準
 # ============================================================================
-WORLD_START_YEAR = 1             # 第一個 Game Loop 顯示為世界曆第 1 年
-YEARS_PER_TURN = 1               # 固定：1 回合 = 1 年
-SECONDS_PER_YEAR = 2.0           # 預設現實 2 秒推進 1 回合／1 年
-YEARS_PER_SEASON = 500           # 一屆固定 500 年（500 回合）
-SEASON_DURATION_SECONDS = YEARS_PER_SEASON * SECONDS_PER_YEAR
-SEASON_SECONDS = SEASON_DURATION_SECONDS  # 舊介面相容名稱，禁止再除以秒／年
+WORLD_START_YEAR = _setting("WORLD_START_YEAR")  # 設定集中於 game_settings.py
+YEARS_PER_TURN = _setting("YEARS_PER_TURN")  # 設定集中於 game_settings.py
+SECONDS_PER_YEAR = _setting("SECONDS_PER_YEAR")  # 設定集中於 game_settings.py
+YEARS_PER_SEASON = _setting("YEARS_PER_SEASON")  # 設定集中於 game_settings.py
+SEASON_DURATION_SECONDS = _setting("SEASON_DURATION_SECONDS")  # 設定集中於 game_settings.py
+SEASON_SECONDS = _setting("SEASON_SECONDS")  # 設定集中於 game_settings.py
 
 # 【新生與重建保護參數】單位都是世界年；1 年就是 1 回合
-NEW_COUNTRY_PROTECTION_YEARS = 10
-REBUILD_PROTECTION_YEARS = 200
-REBUILD_PROTECTION_BLOCK_ATTACK = True      # 是否可打架
-REBUILD_PROTECTION_BLOCK_ALLIANCE = False   # 是否可加入聯盟
+NEW_COUNTRY_PROTECTION_YEARS = _setting("NEW_COUNTRY_PROTECTION_YEARS")  # 設定集中於 game_settings.py
+REBUILD_PROTECTION_YEARS = _setting("REBUILD_PROTECTION_YEARS")  # 設定集中於 game_settings.py
+REBUILD_PROTECTION_BLOCK_ATTACK = _setting("REBUILD_PROTECTION_BLOCK_ATTACK")  # 設定集中於 game_settings.py
+REBUILD_PROTECTION_BLOCK_ALLIANCE = _setting("REBUILD_PROTECTION_BLOCK_ALLIANCE")  # 設定集中於 game_settings.py
 
 # 【新國家安全準備】不增加 Q 維度；以連續分數輔助原本四維狀態
-SURVIVAL_PREPARATION_WINDOW_YEARS = 50 # 脫保前多少年開始強化備戰學習
-SECURITY_SAFE_THRESHOLD = 35           # 低於此分視為安全
-SECURITY_CRITICAL_THRESHOLD = 70       # 達此分視為危急
-SECURITY_TARGET_SOLDIER_RATIO = 0.25   # 脫保時希望至少 25% 人口為士兵
-SECURITY_TARGET_FORTIFICATION = 40     # 脫保時希望至少 40 城防
-SECURITY_TARGET_SUPPLY_YEARS = 5.0     # 糧食與金屬至少支撐 5 年戰爭
-SECURITY_POST_PROTECTION_MILESTONES = (25, 50, 100)
+SURVIVAL_PREPARATION_WINDOW_YEARS = _setting("SURVIVAL_PREPARATION_WINDOW_YEARS")  # 設定集中於 game_settings.py
+SECURITY_SAFE_THRESHOLD = _setting("SECURITY_SAFE_THRESHOLD")  # 設定集中於 game_settings.py
+SECURITY_CRITICAL_THRESHOLD = _setting("SECURITY_CRITICAL_THRESHOLD")  # 設定集中於 game_settings.py
+SECURITY_TARGET_SOLDIER_RATIO = _setting("SECURITY_TARGET_SOLDIER_RATIO")  # 設定集中於 game_settings.py
+SECURITY_TARGET_FORTIFICATION = _setting("SECURITY_TARGET_FORTIFICATION")  # 設定集中於 game_settings.py
+SECURITY_TARGET_SUPPLY_YEARS = _setting("SECURITY_TARGET_SUPPLY_YEARS")  # 設定集中於 game_settings.py
+SECURITY_POST_PROTECTION_MILESTONES = _setting("SECURITY_POST_PROTECTION_MILESTONES")  # 設定集中於 game_settings.py
 
 # 【普通聯盟成長】未滿 5 國時逐步降低入盟門檻，滿 5 國後停止收人
-ALLIANCE_MAX_MEMBERS = 5
-ALLIANCE_EXISTING_JOIN_CHANCE = 0.80 # 有空缺聯盟時，優先申請加入而非另創新盟
-ALLIANCE_UNDERFILLED_JOIN_BONUS = {
-    1: 0.20,
-    2: 0.16,
-    3: 0.10,
-    4: 0.05,
-}
+ALLIANCE_MAX_MEMBERS = _setting("ALLIANCE_MAX_MEMBERS")  # 設定集中於 game_settings.py
+ALLIANCE_EXISTING_JOIN_CHANCE = _setting("ALLIANCE_EXISTING_JOIN_CHANCE")  # 設定集中於 game_settings.py
+ALLIANCE_UNDERFILLED_JOIN_BONUS = _setting("ALLIANCE_UNDERFILLED_JOIN_BONUS")  # 設定集中於 game_settings.py
 
 # 【弱國主權韌性】不延長無敵期，改用準備、外交代價、本土防禦與分層戰敗
-SUBJUGATION_BEFORE_ANNEXATION = 0       # 0：合法攻陷後直接亡國；設 1 才是首次先附庸
-PRE_RELEASE_GUARANTEED_ACTION_YEARS = 50 # 脫保前最後 50 年每年保證一次自主決策
-POST_PROTECTION_TRANSITION_YEARS = 50   # 脫保後國際仍特別關注的過渡期
-POST_PROTECTION_TARGET_SCORE_PENALTY = 45.0
-POST_PROTECTION_ATTACK_INFAMY = 18
-POST_PROTECTION_ATTACK_DREAD = 6000
-POST_PROTECTION_ATTACK_STABILITY_LOSS = 6.0
-HOMELAND_DEFENSE_BONUS_MAX = 0.35       # 極端兵力差下最高 35% 本土防禦加成
-VASSAL_DURATION_YEARS = 150
-CAPITULATION_PROTECTION_YEARS = 40
-VASSAL_REPARATION_RATE = 0.12
+SUBJUGATION_BEFORE_ANNEXATION = _setting("SUBJUGATION_BEFORE_ANNEXATION")  # 設定集中於 game_settings.py
+PRE_RELEASE_GUARANTEED_ACTION_YEARS = _setting("PRE_RELEASE_GUARANTEED_ACTION_YEARS")  # 設定集中於 game_settings.py
+POST_PROTECTION_TRANSITION_YEARS = _setting("POST_PROTECTION_TRANSITION_YEARS")  # 設定集中於 game_settings.py
+POST_PROTECTION_TARGET_SCORE_PENALTY = _setting("POST_PROTECTION_TARGET_SCORE_PENALTY")  # 設定集中於 game_settings.py
+POST_PROTECTION_ATTACK_INFAMY = _setting("POST_PROTECTION_ATTACK_INFAMY")  # 設定集中於 game_settings.py
+POST_PROTECTION_ATTACK_DREAD = _setting("POST_PROTECTION_ATTACK_DREAD")  # 設定集中於 game_settings.py
+POST_PROTECTION_ATTACK_STABILITY_LOSS = _setting("POST_PROTECTION_ATTACK_STABILITY_LOSS")  # 設定集中於 game_settings.py
+HOMELAND_DEFENSE_BONUS_MAX = _setting("HOMELAND_DEFENSE_BONUS_MAX")  # 設定集中於 game_settings.py
+VASSAL_DURATION_YEARS = _setting("VASSAL_DURATION_YEARS")  # 設定集中於 game_settings.py
+CAPITULATION_PROTECTION_YEARS = _setting("CAPITULATION_PROTECTION_YEARS")  # 設定集中於 game_settings.py
+VASSAL_REPARATION_RATE = _setting("VASSAL_REPARATION_RATE")  # 設定集中於 game_settings.py
 
 # 【戰爭集結與預警】宣戰後先集結，不在同一年瞬間交戰。
-WAR_MUSTER_YEARS_MIN = 10
-WAR_MUSTER_YEARS_MAX = 20
+WAR_MUSTER_YEARS_MIN = _setting("WAR_MUSTER_YEARS_MIN")  # 設定集中於 game_settings.py
+WAR_MUSTER_YEARS_MAX = _setting("WAR_MUSTER_YEARS_MAX")  # 設定集中於 game_settings.py
 
 # 【國家生存戒嚴】低軍備自動觸發，採進入／解除雙門檻避免反覆開關。
-MARTIAL_LAW_TRIGGER_SOLDIER_RATIO = 0.05
-MARTIAL_LAW_RELEASE_SOLDIER_RATIO = 0.30
-MARTIAL_LAW_RECRUIT_MULTIPLIER = 4.0
-MARTIAL_LAW_UPKEEP_MULTIPLIER = 2.0
+MARTIAL_LAW_TRIGGER_SOLDIER_RATIO = _setting("MARTIAL_LAW_TRIGGER_SOLDIER_RATIO")  # 設定集中於 game_settings.py
+MARTIAL_LAW_RELEASE_SOLDIER_RATIO = _setting("MARTIAL_LAW_RELEASE_SOLDIER_RATIO")  # 設定集中於 game_settings.py
+MARTIAL_LAW_RECRUIT_MULTIPLIER = _setting("MARTIAL_LAW_RECRUIT_MULTIPLIER")  # 設定集中於 game_settings.py
+MARTIAL_LAW_UPKEEP_MULTIPLIER = _setting("MARTIAL_LAW_UPKEEP_MULTIPLIER")  # 設定集中於 game_settings.py
 
 # 【本屆後段爭冠】前10名每年取得決策機會，但仍由 Q 值選擇行動。
-LATE_SEASON_CONTENDER_COUNT = 10
+LATE_SEASON_CONTENDER_COUNT = _setting("LATE_SEASON_CONTENDER_COUNT")  # 設定集中於 game_settings.py
 
 # 【復名政變】曾被政變改國號的國家，後續政變有機會恢復原始國名。
-RESTORATION_COUP_CHANCE = 0.20
+RESTORATION_COUP_CHANCE = _setting("RESTORATION_COUP_CHANCE")  # 設定集中於 game_settings.py
 
 # ============================================================================
 # 【反霸權圍剿參數】全部以世界年／國家數為單位，集中於頂部方便調整
 # ============================================================================
-COALITION_MAX_ACTIVE = 4             # 同時最多存在 4 個圍剿聯盟
-COALITION_MIN_MEMBERS = 3            # 成立所需最低成員數
-COALITION_MAX_MEMBERS = 5            # 每個圍剿聯盟最多 5 國
-COALITION_ONE_PER_TARGET = True       # 同一目標同時只能被一個圍剿聯盟鎖定
-COALITION_ATTACK_INTERVAL_YEARS = 100 # 至少每 100 年主動討伐目標一次
-COALITION_INITIAL_ATTACK_DELAY_YEARS = 10 # 成立後最晚 10 年內發動第一次討伐
-COALITION_TARGET_POWER_RATIO = 0.95   # 招募至聯軍戰力約為目標 95% 即停止
-COALITION_MAX_DURATION = 500          # 圍剿聯盟最長存在年數
-COALITION_COOLDOWN_YEARS = 12         # 解散後目標與成員的冷卻年數
-HEGEMON_SHARE_TRIGGER = 0.15          # 戰力占全球 15% 視為霸權候選
-HEGEMON_LEAD_TRIGGER = 1.80           # 或戰力達第二名 1.8 倍
-HEGEMON_REQUIRED_STREAK = 3           # 連續維持幾年才成為一般霸權目標
-INTERNATIONAL_DREAD_CANDIDATE_THRESHOLD = 100000 # 達此忌憚值即可成為圍剿目標
-COALITION_FORMATION_BOUNTY_BASE = 10  # 成立懸賞（再乘 MONEY_RATIO）
-COALITION_VICTORY_BOUNTY_BASE = 60    # 勝利懸賞（再乘 MONEY_RATIO）
+COALITION_MAX_ACTIVE = _setting("COALITION_MAX_ACTIVE")  # 設定集中於 game_settings.py
+COALITION_MIN_MEMBERS = _setting("COALITION_MIN_MEMBERS")  # 設定集中於 game_settings.py
+COALITION_MAX_MEMBERS = _setting("COALITION_MAX_MEMBERS")  # 設定集中於 game_settings.py
+COALITION_ONE_PER_TARGET = _setting("COALITION_ONE_PER_TARGET")  # 設定集中於 game_settings.py
+COALITION_ATTACK_INTERVAL_YEARS = _setting("COALITION_ATTACK_INTERVAL_YEARS")  # 設定集中於 game_settings.py
+COALITION_INITIAL_ATTACK_DELAY_YEARS = _setting("COALITION_INITIAL_ATTACK_DELAY_YEARS")  # 設定集中於 game_settings.py
+COALITION_TARGET_POWER_RATIO = _setting("COALITION_TARGET_POWER_RATIO")  # 設定集中於 game_settings.py
+COALITION_MAX_DURATION = _setting("COALITION_MAX_DURATION")  # 設定集中於 game_settings.py
+COALITION_COOLDOWN_YEARS = _setting("COALITION_COOLDOWN_YEARS")  # 設定集中於 game_settings.py
+HEGEMON_SHARE_TRIGGER = _setting("HEGEMON_SHARE_TRIGGER")  # 設定集中於 game_settings.py
+HEGEMON_LEAD_TRIGGER = _setting("HEGEMON_LEAD_TRIGGER")  # 設定集中於 game_settings.py
+HEGEMON_REQUIRED_STREAK = _setting("HEGEMON_REQUIRED_STREAK")  # 設定集中於 game_settings.py
+INTERNATIONAL_DREAD_CANDIDATE_THRESHOLD = _setting("INTERNATIONAL_DREAD_CANDIDATE_THRESHOLD")  # 設定集中於 game_settings.py
+COALITION_FORMATION_BOUNTY_BASE = _setting("COALITION_FORMATION_BOUNTY_BASE")  # 設定集中於 game_settings.py
+COALITION_VICTORY_BOUNTY_BASE = _setting("COALITION_VICTORY_BOUNTY_BASE")  # 設定集中於 game_settings.py
 
 # 無守軍攻城仍可能因城防、陷阱與事故受傷，但不再按攻方大軍總數固定扣 1%~4%。
-UNDEFENDED_SIEGE_ATTACKER_LOSS_PER_FORT = 0.35
-UNDEFENDED_SIEGE_ATTACKER_LOSS_RATE_CAP = 0.005
-UNDEFENDED_CAPITAL_FORT_THRESHOLD = 0 # 無守軍且城防降至此值，當回合國都陷落
-UNDEFENDED_MAX_SIEGE_YEARS = 10        # 無守軍但仍有城防，最多再抵抗 N 年
+UNDEFENDED_SIEGE_ATTACKER_LOSS_PER_FORT = _setting("UNDEFENDED_SIEGE_ATTACKER_LOSS_PER_FORT")  # 設定集中於 game_settings.py
+UNDEFENDED_SIEGE_ATTACKER_LOSS_RATE_CAP = _setting("UNDEFENDED_SIEGE_ATTACKER_LOSS_RATE_CAP")  # 設定集中於 game_settings.py
+UNDEFENDED_CAPITAL_FORT_THRESHOLD = _setting("UNDEFENDED_CAPITAL_FORT_THRESHOLD")  # 設定集中於 game_settings.py
+UNDEFENDED_MAX_SIEGE_YEARS = _setting("UNDEFENDED_MAX_SIEGE_YEARS")  # 設定集中於 game_settings.py
+
+ALLIANCE_NAME = {""}
 
 
 # 所有執行期讀寫檔集中放在程式旁的 saves 資料夾。
@@ -187,8 +186,8 @@ def _wait_for_simulation_permission():
 # 📜 Log 自動寫入文字檔（最新訊息在第一行，限制 1000 行）
 # ================================================
 LOG_FILE = save_path("game.log")
-MAX_LOG_LINES = 1000
-LOG_FLUSH_INTERVAL = 0.25
+MAX_LOG_LINES = _setting("MAX_LOG_LINES")  # 設定集中於 game_settings.py
+LOG_FLUSH_INTERVAL = _setting("LOG_FLUSH_INTERVAL")  # 設定集中於 game_settings.py
 log_buffer = deque(maxlen=MAX_LOG_LINES)
 _log_dirty = False
 _last_log_flush = 0.0
@@ -300,231 +299,116 @@ def _load_consistent_snapshot_pair(countries_file, alliances_file):
 # 4. 全面戰爭比襲擾昂貴；打仗必須消耗糧草、兵器，戰利品不再憑空生成。
 # 5. 資源庫存過高時採「邊際產能下降」，避免幾百輪後木材／金屬膨脹到數十萬。
 #
-# 想自行微調時，原則上只改這一區即可。
+# 調整時請修改game_settings.py；此處只保留既有引用名稱。
 BALANCE_VERSION = 10
-GLOBAL_EVENT_CHANCE = 0.05
-COMPACT_FORMAT=True  #JSON檔是否要漂亮排版 {True: 不要, False: 要}
+GLOBAL_EVENT_CHANCE = _setting("GLOBAL_EVENT_CHANCE")  # 設定集中於 game_settings.py
+COMPACT_FORMAT = _setting("COMPACT_FORMAT")  # 設定集中於 game_settings.py
 
 # ====================================================
 # 【戰國模式 V3：動態事件 / 政權更替】
 # ====================================================
 # 這是「全世界每回合」抽一次，而不是每國都抽，因此事件不會洗版。
-DYNAMIC_EVENT_CHANCE = 0.045
-EVENT_HISTORY_MAX = 20
+DYNAMIC_EVENT_CHANCE = _setting("DYNAMIC_EVENT_CHANCE")  # 設定集中於 game_settings.py
+EVENT_HISTORY_MAX = _setting("EVENT_HISTORY_MAX")  # 設定集中於 game_settings.py
 
 # 正統交接採「政權壽命制」：
 # 政權至少存續 5000 Loop；達到門檻後，每輪有 10% 機率完成合法交接。
 # 政治崩壞則仍可能在壽命到期前因政變提前更替。
-REGIME_CHANGE_COOLDOWN_TURNS = 90
-SUCCESSION_MIN_TENURE = 2500
-SUCCESSION_CHANCE_PER_COUNTRY = 0.1
+REGIME_CHANGE_COOLDOWN_TURNS = _setting("REGIME_CHANGE_COOLDOWN_TURNS")  # 設定集中於 game_settings.py
+SUCCESSION_MIN_TENURE = _setting("SUCCESSION_MIN_TENURE")  # 設定集中於 game_settings.py
+SUCCESSION_CHANCE_PER_COUNTRY = _setting("SUCCESSION_CHANCE_PER_COUNTRY")  # 設定集中於 game_settings.py
 
 # 舊程式引用名稱保留相容；新建國與重建國已分成頂部兩組參數。
-NEWBIE_PROTECTION_TURNS = NEW_COUNTRY_PROTECTION_YEARS
+NEWBIE_PROTECTION_TURNS = _setting("NEWBIE_PROTECTION_TURNS")  # 設定集中於 game_settings.py
 
 # 戰前軍事風險評估：不是開戰後才補兵，而是在和平期先觀察潛在攻擊者。
 # 沒有地理地圖時，以戰力排名前後各 3 名作為「潛在攻擊者」。
-PREWAR_THREAT_CANDIDATE_COUNT = 5
-PREWAR_RISK_ALERT = 45
-PREWAR_RISK_HIGH = 65
-PREWAR_RISK_CRITICAL = 85
-PREWAR_MOBILIZE_SOFT_CHANCE_MIN = 0.10
-PREWAR_MOBILIZE_SOFT_CHANCE_MAX = 0.45
-PREWAR_CRITICAL_SOLDIER_RATIO = 0.22
-PREWAR_RESOURCE_FOOD_RUNWAY = 4.0
-PREWAR_RESOURCE_METAL_PER_POP = 0.20
+PREWAR_THREAT_CANDIDATE_COUNT = _setting("PREWAR_THREAT_CANDIDATE_COUNT")  # 設定集中於 game_settings.py
+PREWAR_RISK_ALERT = _setting("PREWAR_RISK_ALERT")  # 設定集中於 game_settings.py
+PREWAR_RISK_HIGH = _setting("PREWAR_RISK_HIGH")  # 設定集中於 game_settings.py
+PREWAR_RISK_CRITICAL = _setting("PREWAR_RISK_CRITICAL")  # 設定集中於 game_settings.py
+PREWAR_MOBILIZE_SOFT_CHANCE_MIN = _setting("PREWAR_MOBILIZE_SOFT_CHANCE_MIN")  # 設定集中於 game_settings.py
+PREWAR_MOBILIZE_SOFT_CHANCE_MAX = _setting("PREWAR_MOBILIZE_SOFT_CHANCE_MAX")  # 設定集中於 game_settings.py
+PREWAR_CRITICAL_SOLDIER_RATIO = _setting("PREWAR_CRITICAL_SOLDIER_RATIO")  # 設定集中於 game_settings.py
+PREWAR_RESOURCE_FOOD_RUNWAY = _setting("PREWAR_RESOURCE_FOOD_RUNWAY")  # 設定集中於 game_settings.py
+PREWAR_RESOURCE_METAL_PER_POP = _setting("PREWAR_RESOURCE_METAL_PER_POP")  # 設定集中於 game_settings.py
 # 自身軍民失衡預警：農民相對士兵過多時，即使沒有明確敵人，也要提高戰備危機。
-PREWAR_FARMER_SOLDIER_ALERT_RATIO = 3.0
-PREWAR_FARMER_SOLDIER_HIGH_RATIO = 4.0
-PREWAR_FARMER_SOLDIER_CRITICAL_RATIO = 4.5
-PREWAR_FORCE_BALANCE_ALERT_SCORE = 45.0
-PREWAR_FORCE_BALANCE_HIGH_SCORE = 65.0
-PREWAR_FORCE_BALANCE_CRITICAL_SCORE = 82.0
+PREWAR_FARMER_SOLDIER_ALERT_RATIO = _setting("PREWAR_FARMER_SOLDIER_ALERT_RATIO")  # 設定集中於 game_settings.py
+PREWAR_FARMER_SOLDIER_HIGH_RATIO = _setting("PREWAR_FARMER_SOLDIER_HIGH_RATIO")  # 設定集中於 game_settings.py
+PREWAR_FARMER_SOLDIER_CRITICAL_RATIO = _setting("PREWAR_FARMER_SOLDIER_CRITICAL_RATIO")  # 設定集中於 game_settings.py
+PREWAR_FORCE_BALANCE_ALERT_SCORE = _setting("PREWAR_FORCE_BALANCE_ALERT_SCORE")  # 設定集中於 game_settings.py
+PREWAR_FORCE_BALANCE_HIGH_SCORE = _setting("PREWAR_FORCE_BALANCE_HIGH_SCORE")  # 設定集中於 game_settings.py
+PREWAR_FORCE_BALANCE_CRITICAL_SCORE = _setting("PREWAR_FORCE_BALANCE_CRITICAL_SCORE")  # 設定集中於 game_settings.py
 
 # 動態事件持續時間（Game Loop）。
-EVENT_DURATION_SHORT = 5
-EVENT_DURATION_NORMAL = 8
-EVENT_DURATION_LONG = 10
+EVENT_DURATION_SHORT = _setting("EVENT_DURATION_SHORT")  # 設定集中於 game_settings.py
+EVENT_DURATION_NORMAL = _setting("EVENT_DURATION_NORMAL")  # 設定集中於 game_settings.py
+EVENT_DURATION_LONG = _setting("EVENT_DURATION_LONG")  # 設定集中於 game_settings.py
 
 
 #貨幣倍率
-MONEY_RATIO = 1
-INIT_GOLD = 0
+MONEY_RATIO = _setting("MONEY_RATIO")  # 設定集中於 game_settings.py
+INIT_GOLD = _setting("INIT_GOLD")  # 設定集中於 game_settings.py
 
 # 基礎建設是永久投資：實際支付三種資產，換取正式生產與市場效率。
-INFRASTRUCTURE_MAX = 100
-INFRASTRUCTURE_GOLD_BASE = 60 * MONEY_RATIO
-INFRASTRUCTURE_WOOD_BASE = 50
-INFRASTRUCTURE_METAL_BASE = 20
-INDUSTRY_FOCUS_DURATION = 8
+INFRASTRUCTURE_MAX = _setting("INFRASTRUCTURE_MAX")  # 設定集中於 game_settings.py
+INFRASTRUCTURE_GOLD_BASE = _setting("INFRASTRUCTURE_GOLD_BASE")  # 設定集中於 game_settings.py
+INFRASTRUCTURE_WOOD_BASE = _setting("INFRASTRUCTURE_WOOD_BASE")  # 設定集中於 game_settings.py
+INFRASTRUCTURE_METAL_BASE = _setting("INFRASTRUCTURE_METAL_BASE")  # 設定集中於 game_settings.py
+INDUSTRY_FOCUS_DURATION = _setting("INDUSTRY_FOCUS_DURATION")  # 設定集中於 game_settings.py
 
-BALANCE = {
-    # 人口與住房
-    "HOUSE_WOOD_COST": 100,
-    # 房屋接近滿載才擴建，避免容量長期遠高於人口。
-    "HOUSE_BUILD_THRESHOLD": 0.93,
-    # 若房屋容量長期超過人口 30%，每輪會有少量閒置房屋自然荒廢。
-    "HOUSE_EXCESS_CAPACITY_RATIO": 2.0,
-    "HOUSE_ABANDON_MAX_PER_TURN": 6,
-    "FOOD_COST_PER_BIRTH": 8,
-    "BIRTH_MIN_RESERVE_TURNS": 5.0,
-    "BIRTH_RATE_MIN": 0.015,
-    "BIRTH_RATE_MAX": 0.030,
-    "BIRTH_MAX_PER_TURN": 10,
-
-    # 農民基礎產能（每名被分派到該工作的農民／每輪）
-    "FOOD_PER_WORKER": 6.0,  # 4.2
-    "WOOD_PER_WORKER": 3.0,
-    "METAL_PER_WORKER": 2.0, # 1.7 
-
-    # 每輪消耗
-    "FARMER_FOOD_UPKEEP": 1.0,
-    # 每名農民每輪另需 0.5 木材，用於住宅裝修；金屬、糧食消耗不變。
-    "FARMER_WOOD_UPKEEP": 0,
-    "SOLDIER_FOOD_UPKEEP": 2.0,
-    "SOLDIER_METAL_UPKEEP": 0.20,
-    # 房屋每年維修消耗木材，按小數累積至整數再扣。
-    "HOUSE_WOOD_UPKEEP_PER_HOUSE": 0.05,
-    "OVERCROWD_FOOD_PENALTY": 1.5,
-
-    # 徵兵
-    "RECRUIT_METAL_COST": 8,
-    "RECRUIT_FOOD_COST": 3,
-    # 一般自動徵兵會隨人口動態放大，不再永遠只有 4~12 人。
-    "RECRUIT_BATCH_MIN": 8,
-    "RECRUIT_BATCH_MAX": 36,
-    "RECRUIT_DYNAMIC_POP_RATIO": 0.012,
-    "RECRUIT_DYNAMIC_MAX": 60,
-
-    # Action 6「戰時動員」可一次動員約人口 3%，但封頂避免瞬間抽乾農民。
-    "MOBILIZE_POP_RATIO": 0.030,
-    "MOBILIZE_MIN": 18,
-    "MOBILIZE_MAX": 120,
-
-    # 糧食安全與勞工配置
-    "FAMINE_WARNING_TURNS": 3.0,
-    "LOW_FOOD_TURNS": 6.0,
-    "SURPLUS_FOOD_TURNS": 8.5,
-
-    # 庫存過高時，採集效率下降（不是硬砍庫存）
-    "SURPLUS_PRODUCTION_FACTOR": 0.12,
-    "SURPLUS_FOOD_PRODUCTION_FACTOR": 0.28,
-    "WOOD_SURPLUS_MIN_FACTOR": 0.005,
-    "WOOD_SURPLUS_DAMPING_EXPONENT": 8,
-    "WOOD_RESERVE_PER_POP": 3.0,
-    "METAL_RESERVE_PER_POP": 0.8,
-    "METAL_RESERVE_PER_SOLDIER": 2.5,
-
-    # 非戰鬥人口／軍力保護
-    # 糧食或金屬不足時只允許「逐步退伍」，禁止一輪把數百士兵全部轉回農夫。
-    "EMERGENCY_DEMOB_MAX_RATIO": 0.02,       # 每輪最多退伍總人口 2%
-    "EMERGENCY_DEMOB_MAX_COUNT": 20,         # 且最多 20 人
-    "METAL_SHORTAGE_DEMOB_MAX_RATIO": 0.03,  # 金屬不足每輪最多退伍總人口 3%
-    "METAL_SHORTAGE_DEMOB_MAX_COUNT": 25,
-
-    # 飢荒採漸進制：第一次欠糧先進入配給，不立即大量死亡。
-    "FAMINE_GRACE_TURNS": 1,
-    "FAMINE_DEFICIT_PER_DEATH": 6.0,
-    "FAMINE_MAX_POP_LOSS_RATIO": 0.015,      # 每輪最多死亡總人口 1.5%
-    "FAMINE_MAX_DEATHS_PER_TURN": 40,
-
-    # 全面戰爭：每名「實際出征士兵」的一次性補給
-    "WAR_DEPLOY_MIN": 0.45,
-    "WAR_DEPLOY_MAX": 0.65,
-    "WAR_FOOD_PER_SOLDIER": 0.80,
-    "WAR_METAL_PER_SOLDIER": 0.90,
-    "WAR_WOOD_PER_SOLDIER": 0.50,
-
-    # 正面交戰規模與傷亡
-    "BATTLE_CLASH_MIN": 0.25,
-    "BATTLE_CLASH_MAX": 0.45,
-    "BATTLE_LOSS_MIN": 0.65,
-    "BATTLE_LOSS_MAX": 0.95,
-
-    # 戰爭掠奪負重（每名實際出征士兵）
-    "PLUNDER_FOOD_PER_SOLDIER": 5,
-    "PLUNDER_WOOD_PER_SOLDIER": 3,
-    "PLUNDER_METAL_PER_SOLDIER": 2,
-
-    # 滅國後可帶走的敵方現有庫存比例
-    "CONQUEST_CAPTURE_RATE": 0.25,
-
-    # 小規模襲擾
-    "RAID_FORCE_RATIO": 0.15,
-    "RAID_FOOD_PER_SOLDIER": 0.60,
-    "RAID_METAL_PER_SOLDIER": 0.25,
-    "RAID_LOSS_MIN": 0.03,
-    "RAID_LOSS_MAX": 0.08,
-
-    # 初始國家資源
-    "START_FOOD_MIN": 700,
-    "START_FOOD_MAX": 1200,
-    "START_WOOD_MIN": 250,
-    "START_WOOD_MAX": 450,
-    "START_METAL_MIN": 150,
-    "START_METAL_MAX": 300,
-    # V8 世界共同貨幣：由世界銀行發行，不可由各國自行印鈔。
-    "START_GOLD_MIN": 400*MONEY_RATIO,
-    "START_GOLD_MAX": 400*MONEY_RATIO,
-}
+BALANCE = _setting("BALANCE")  # 設定集中於 game_settings.py
 
 # ====================================================
 # 【V8 世界銀行 / 世界市場】
 # ====================================================
 CURRENCY_VERSION = 1
-WORLD_BANK_NAME = "世界銀行"
-WORLD_CURRENCY_NAME = "大洋"
+WORLD_BANK_NAME = _setting("WORLD_BANK_NAME")  # 設定集中於 game_settings.py
+WORLD_CURRENCY_NAME = _setting("WORLD_CURRENCY_NAME")  # 設定集中於 game_settings.py
 # 只作名稱備選；所有名稱使用同一套 gold 帳本，不會自動兌換。
-WORLD_CURRENCY_NAME_OPTIONS = (
-    "大洋", "銀幣", "白銀", "銀元", "銀圓", "通寶", "世界幣", "聯邦幣", "商幣", "國際幣",
-    "銀兩", "銀票", "銀盾", "月銀", "星幣", "海元", "商銀", "環球幣", "銀冠", "新大洋", "曜銀",
-)
-WORLD_BANK_RESPAWN_GRANT = 120*MONEY_RATIO
-WORLD_BANK_TRANSACTION_FEE_RATE = 0.01
-WORLD_BANK_LIQUIDITY_INTERVAL = 10
-WORLD_BANK_MIN_RESERVE = WORLD_BANK_RESPAWN_GRANT * 3
-WORLD_BANK_LIQUIDITY_SHARE = 0.20
-WORLD_BANK_LIQUIDITY_GRANT_CAP = 60*MONEY_RATIO
-CURRENCY_AUDIT_TOLERANCE = 0
+WORLD_CURRENCY_NAME_OPTIONS = _setting("WORLD_CURRENCY_NAME_OPTIONS")  # 設定集中於 game_settings.py
+WORLD_BANK_RESPAWN_GRANT = _setting("WORLD_BANK_RESPAWN_GRANT")  # 設定集中於 game_settings.py
+WORLD_BANK_TRANSACTION_FEE_RATE = _setting("WORLD_BANK_TRANSACTION_FEE_RATE")  # 設定集中於 game_settings.py
+WORLD_BANK_LIQUIDITY_INTERVAL = _setting("WORLD_BANK_LIQUIDITY_INTERVAL")  # 設定集中於 game_settings.py
+WORLD_BANK_MIN_RESERVE = _setting("WORLD_BANK_MIN_RESERVE")  # 設定集中於 game_settings.py
+WORLD_BANK_LIQUIDITY_SHARE = _setting("WORLD_BANK_LIQUIDITY_SHARE")  # 設定集中於 game_settings.py
+WORLD_BANK_LIQUIDITY_GRANT_CAP = _setting("WORLD_BANK_LIQUIDITY_GRANT_CAP")  # 設定集中於 game_settings.py
+CURRENCY_AUDIT_TOLERANCE = _setting("CURRENCY_AUDIT_TOLERANCE")  # 設定集中於 game_settings.py
 
 MARKET_RESOURCES = ("food", "wood", "metal")
-MARKET_RESOURCE_META = {
-    "food": {"name": "糧食", "seed_price": 1.00*MONEY_RATIO},
-    "wood": {"name": "木材", "seed_price": 1.80*MONEY_RATIO},
-    "metal": {"name": "金屬", "seed_price": 3.20*MONEY_RATIO},
-}
-MARKET_ORDER_TTL = 4
-MARKET_MAX_ORDERS = 300
-MARKET_TRADE_HISTORY_MAX = 60
-MARKET_PRICE_HISTORY_MAX = 40
-MARKET_PRICE_LIMIT_RATE = 0.20
-MARKET_VWAP_WINDOW = 10
+MARKET_RESOURCE_META = _setting("MARKET_RESOURCE_META")  # 設定集中於 game_settings.py
+MARKET_ORDER_TTL = _setting("MARKET_ORDER_TTL")  # 設定集中於 game_settings.py
+MARKET_MAX_ORDERS = _setting("MARKET_MAX_ORDERS")  # 設定集中於 game_settings.py
+MARKET_TRADE_HISTORY_MAX = _setting("MARKET_TRADE_HISTORY_MAX")  # 設定集中於 game_settings.py
+MARKET_PRICE_HISTORY_MAX = _setting("MARKET_PRICE_HISTORY_MAX")  # 設定集中於 game_settings.py
+MARKET_PRICE_LIMIT_RATE = _setting("MARKET_PRICE_LIMIT_RATE")  # 設定集中於 game_settings.py
+MARKET_VWAP_WINDOW = _setting("MARKET_VWAP_WINDOW")  # 設定集中於 game_settings.py
 # 市場允許低價掛單；僅在屆末以國家間實際成交判斷是否重定面額。
-MARKET_PRICE_FLOOR_RATE = 0.00001
-MARKET_PRICE_CEILING_RATE = 2.50
-WORLD_BANK_ISSUE_TRIGGER_RATE = 0.10
+MARKET_PRICE_FLOOR_RATE = _setting("MARKET_PRICE_FLOOR_RATE")  # 設定集中於 game_settings.py
+MARKET_PRICE_CEILING_RATE = _setting("MARKET_PRICE_CEILING_RATE")  # 設定集中於 game_settings.py
+WORLD_BANK_ISSUE_TRIGGER_RATE = _setting("WORLD_BANK_ISSUE_TRIGGER_RATE")  # 設定集中於 game_settings.py
 # V8_5_5：以真實成交監測價格，而非用最後報價或固定價撐市。
-MARKET_MONITOR_INTERVAL = 10             # 每 10 年彙整一次；不在每輪讀寫大量成交紀錄
-MARKET_MONITOR_HISTORY = 24
-MARKET_MONITOR_MIN_RESOURCE_QTY = 3     # 單資源過小成交，不列為有效價格樣本
-MARKET_MONITOR_MIN_TOTAL_QTY = 20
-MARKET_BASKET_WEIGHTS = {"food": 0.50, "wood": 0.30, "metal": 0.20}
-MARKET_DEFLATION_3WINDOW = 0.03       # 連續 3 個觀測窗，累積跌幅至少 3%
-MARKET_VOLUME_CONTRACTION = 0.80     # 最近成交量 < 前兩窗平均 80%
-MARKET_CASH_STRESS_FRACTION = 0.50   # 至少半數存活國家缺乏流動性
-MARKET_ISSUE_PER_OPERATION = 0.001  # 單次最多當前貨幣存量 0.1%
-MARKET_ISSUE_PER_SEASON = 0.01      # 一屆累計最多屆初貨幣存量 1%
+MARKET_MONITOR_INTERVAL = _setting("MARKET_MONITOR_INTERVAL")  # 設定集中於 game_settings.py
+MARKET_MONITOR_HISTORY = _setting("MARKET_MONITOR_HISTORY")  # 設定集中於 game_settings.py
+MARKET_MONITOR_MIN_RESOURCE_QTY = _setting("MARKET_MONITOR_MIN_RESOURCE_QTY")  # 設定集中於 game_settings.py
+MARKET_MONITOR_MIN_TOTAL_QTY = _setting("MARKET_MONITOR_MIN_TOTAL_QTY")  # 設定集中於 game_settings.py
+MARKET_BASKET_WEIGHTS = _setting("MARKET_BASKET_WEIGHTS")  # 設定集中於 game_settings.py
+MARKET_DEFLATION_3WINDOW = _setting("MARKET_DEFLATION_3WINDOW")  # 設定集中於 game_settings.py
+MARKET_VOLUME_CONTRACTION = _setting("MARKET_VOLUME_CONTRACTION")  # 設定集中於 game_settings.py
+MARKET_CASH_STRESS_FRACTION = _setting("MARKET_CASH_STRESS_FRACTION")  # 設定集中於 game_settings.py
+MARKET_ISSUE_PER_OPERATION = _setting("MARKET_ISSUE_PER_OPERATION")  # 設定集中於 game_settings.py
+MARKET_ISSUE_PER_SEASON = _setting("MARKET_ISSUE_PER_SEASON")  # 設定集中於 game_settings.py
 
 # 世界銀行不再以買入商品的方式發行貨幣。
 
-BIRTH_POLICY_GOLD_COST = 120*MONEY_RATIO
-BIRTH_POLICY_DURATION = 12
-BIRTH_POLICY_MULT = 1.80
-PRODUCTION_POLICY_GOLD_COST = 150*MONEY_RATIO
-PRODUCTION_POLICY_DURATION = 10
-PRODUCTION_POLICY_MULT = 1.50
-DIPLOMACY_GOLD_MIN = 60*MONEY_RATIO
-DIPLOMACY_GOLD_MAX = 150*MONEY_RATIO
+BIRTH_POLICY_GOLD_COST = _setting("BIRTH_POLICY_GOLD_COST")  # 設定集中於 game_settings.py
+BIRTH_POLICY_DURATION = _setting("BIRTH_POLICY_DURATION")  # 設定集中於 game_settings.py
+BIRTH_POLICY_MULT = _setting("BIRTH_POLICY_MULT")  # 設定集中於 game_settings.py
+PRODUCTION_POLICY_GOLD_COST = _setting("PRODUCTION_POLICY_GOLD_COST")  # 設定集中於 game_settings.py
+PRODUCTION_POLICY_DURATION = _setting("PRODUCTION_POLICY_DURATION")  # 設定集中於 game_settings.py
+PRODUCTION_POLICY_MULT = _setting("PRODUCTION_POLICY_MULT")  # 設定集中於 game_settings.py
+DIPLOMACY_GOLD_MIN = _setting("DIPLOMACY_GOLD_MIN")  # 設定集中於 game_settings.py
+DIPLOMACY_GOLD_MAX = _setting("DIPLOMACY_GOLD_MAX")  # 設定集中於 game_settings.py
 
 
 def _default_price_monitor():
@@ -2788,18 +2672,74 @@ def generate_country_names(n):
 
 
 def generate_awesome_alliance_name(is_anti_hegemon=False, target_name=""):
+    global ALLIANCE_NAME
     prefixes = [  # 聯盟名稱前綴庫
-        "真理", "正義", "和平", "神聖", "狂熱", "英勇", "至高", "不朽", "榮耀", "天譴",
-        "極光", "創世", "黎明", "終焉", "永恆", "烈焰", "寒冰", "雷霆", "風暴", "大地",
-        "深海", "流沙", "微風", "怒濤", "烈日", "新月", "繁星", "熔線", "霜狼", "蒼穹",
-        "黑鐵", "白銀", "黃金", "水晶", "秘銀", "鋼鐵", "赤紅", "漆黑", "青銅", "黑曜",
-        "巨石", "戰歌", "破曉", "先鋒", "鐵衛", "征服", "庇護", "守護", "堅壁", "裁決"
+        # 王權與霸業
+        "至高", "帝冠", "王座", "皇權", "霸業", "君臨", "天命", "天威",
+        "至尊", "不朽", "萬世", "永恆", "榮耀", "凱旋", "征服", "鐵血",
+        "雄獅", "龍威", "蒼龍", "黑龍", "金獅", "戰鷹", "鐵翼", "王者",
+
+        # 神話與審判
+        "神聖", "聖光", "聖焰", "聖盾", "神諭", "神罰", "天譴", "裁決",
+        "審判", "誓約", "守望", "救贖", "創世", "起源", "諸神", "泰坦",
+        "英靈", "戰神", "龍魂", "鳳凰", "涅槃", "命運", "真理", "秩序",
+
+        # 星辰與天象
+        "蒼穹", "星穹", "星辰", "群星", "繁星", "北辰", "天樞", "銀河",
+        "星海", "星隕", "極光", "曙光", "黎明", "破曉", "旭日", "烈日",
+        "日冕", "赤月", "新月", "月蝕", "日蝕", "長夜", "永夜", "天幕",
+
+        # 戰火與鋼鐵
+        "雷霆", "風暴", "烈焰", "烽火", "燎原", "赤焰", "熾火", "雷火",
+        "鋼鐵", "黑鐵", "玄鐵", "秘銀", "黑曜", "赤鋼", "鐵壁", "堅盾",
+        "利劍", "斷刃", "鋒芒", "戰歌", "軍魂", "先鋒", "鐵衛", "無畏",
+
+        # 山海與冰霜
+        "山河", "崑崙", "蒼岳", "群峰", "磐石", "巨岩", "滄海", "深海",
+        "怒濤", "狂瀾", "洪流", "寒潮", "凜冬", "冰封", "霜寒", "霜狼",
+        "北境", "荒原", "大漠", "長風", "凌霄", "飛雪", "玄冰", "蒼嵐",
+
+        # 暗影與終局
+        "暗影", "幽冥", "深淵", "黑潮", "暮光", "黃昏", "終焉", "末日",
+        "天啟", "浩劫", "劫火", "逆命", "破軍", "七殺", "無疆", "不滅",
+
+        # 團結與理想
+        "自由", "正義", "和平", "共和", "同心", "共榮", "復興", "希望",
+        "庇護", "守護", "忠誠", "堅毅", "眾志", "萬邦", "四海", "遠征",
     ]
+
     suffixes = [  # 聯盟名稱後綴庫
-        "戰線", "憲章", "宣言", "條約", "體系", "陣營", "安保體系", "互助會", "同盟會", "連線",
-        "共識", "密約", "協議", "議定書", "盟約", "陣營", "維和部隊", "聯合防衛線", "合作社", "防衛圈",
-        "夥伴關係", "防衛協議", "公約國", "戰術聯盟", "聯合會"
+        # 正式外交與政治組織
+        "同盟", "聯盟", "同盟會", "聯合會", "協約", "盟約", "公約", "憲章",
+        "協定", "議定書", "共同體", "協約組織", "同盟議會", "聯合議會",
+        "邦聯", "諸國同盟", "列國協約", "萬國議會", "共榮圈", "合作體系",
+
+        # 軍事與共同防衛
+        "戰線", "陣線", "聯合陣線", "防衛陣線", "共同防線", "聯合防線",
+        "防衛同盟", "軍事同盟", "戰略同盟", "聯防組織", "聯防協約",
+        "共同防衛體", "聯合司令部", "戰爭議會", "遠征同盟", "守望同盟",
+        "鐵壁", "壁壘", "戰團", "軍團", "禁衛軍", "先鋒軍",
+
+        # 誓言與史詩
+        "誓盟", "血盟", "聖盟", "王盟", "永誓", "誓約", "鐵誓", "血誓",
+        "聖約", "密約", "戰誓", "遠征誓約", "守護誓約", "不戰之約",
+        "兄弟會", "圓桌會", "守望者", "捍衛者", "征服者", "執劍者",
+
+        # 霸權與秩序
+        "王庭", "聖庭", "議庭", "樞密院", "最高議會", "統合體",
+        "霸權同盟", "秩序同盟", "戰略體系", "安全體系", "和平協約",
+        "復興同盟", "自由陣線", "解放戰線", "保衛同盟", "制衡同盟",
     ]
+
+    
+    while(1):
+        temp_prefixes = random.choice(prefixes)
+        if temp_prefixes not in ALLIANCE_NAME:
+            break
+        else :
+            ALLIANCE_NAME.add(temp_prefixes)
+            temp_prefixes = random.choice(prefixes)
+
 
     if is_anti_hegemon:  # 臨時反霸權聯軍
         target_tag = f"·反{target_name}" if target_name else "·反霸權"
@@ -2972,10 +2912,10 @@ def estimate_war_matchup(attacker_key, defender_key, countries, alliances, activ
 # ====================================================
 # 【亂世演算 V5：普通聯盟議會 / 戰爭表決】
 # ====================================================
-ALLIANCE_WAR_VOTE_COOLDOWN_MIN = 4
-ALLIANCE_WAR_VOTE_COOLDOWN_MAX = 6
-ALLIANCE_JOIN_VOTE_COOLDOWN_MIN = 5
-ALLIANCE_JOIN_VOTE_COOLDOWN_MAX = 8
+ALLIANCE_WAR_VOTE_COOLDOWN_MIN = _setting("ALLIANCE_WAR_VOTE_COOLDOWN_MIN")  # 設定集中於 game_settings.py
+ALLIANCE_WAR_VOTE_COOLDOWN_MAX = _setting("ALLIANCE_WAR_VOTE_COOLDOWN_MAX")  # 設定集中於 game_settings.py
+ALLIANCE_JOIN_VOTE_COOLDOWN_MIN = _setting("ALLIANCE_JOIN_VOTE_COOLDOWN_MIN")  # 設定集中於 game_settings.py
+ALLIANCE_JOIN_VOTE_COOLDOWN_MAX = _setting("ALLIANCE_JOIN_VOTE_COOLDOWN_MAX")  # 設定集中於 game_settings.py
 
 
 def _alliance_vote_target_token(target_key, countries, alliances):
@@ -3894,23 +3834,14 @@ def _finalize_rejected_war_action(
 # ====================================================
 # 【戰國模式 V4：世界局勢模式】
 # ====================================================
-WORLD_MODE_MIN_DURATION = 14
-WORLD_MODE_MAX_DURATION = 24
-WORLD_MODE_PEACE_GAP_MIN = 5
-WORLD_MODE_PEACE_GAP_MAX = 9
-WORLD_MODE_FIRST_START_MIN = 6
-WORLD_MODE_FIRST_START_MAX = 10
+WORLD_MODE_MIN_DURATION = _setting("WORLD_MODE_MIN_DURATION")  # 設定集中於 game_settings.py
+WORLD_MODE_MAX_DURATION = _setting("WORLD_MODE_MAX_DURATION")  # 設定集中於 game_settings.py
+WORLD_MODE_PEACE_GAP_MIN = _setting("WORLD_MODE_PEACE_GAP_MIN")  # 設定集中於 game_settings.py
+WORLD_MODE_PEACE_GAP_MAX = _setting("WORLD_MODE_PEACE_GAP_MAX")  # 設定集中於 game_settings.py
+WORLD_MODE_FIRST_START_MIN = _setting("WORLD_MODE_FIRST_START_MIN")  # 設定集中於 game_settings.py
+WORLD_MODE_FIRST_START_MAX = _setting("WORLD_MODE_FIRST_START_MAX")  # 設定集中於 game_settings.py
 
-WORLD_MODES = {
-    "FRAGMENTED": {"name": "群雄割據", "description": "結盟意願降低，更多聯盟成員自行開戰，局部單國戰增加。", "weight": 1.00},
-    "DIPLOMATIC": {"name": "合縱連橫", "description": "結盟、退盟、背刺與反霸權聯軍都更活躍。", "weight": 1.00},
-    "TOTAL_WAR": {"name": "全面戰國", "description": "宣戰增加、第二戰線更常出現，戰後和平縮短。", "weight": 0.85},
-    "RECUPERATION": {"name": "休養生息", "description": "徵兵略降，人口與經濟優先。", "weight": 1.00},
-    "HEGEMONIC": {"name": "霸權時代", "description": "前三名互相警戒，其餘國家更願意牽制第一名。", "weight": 0.85},
-    "ARMS_RACE": {"name": "軍備競賽", "description": "AI 對排名鄰近國家的兵力差距更敏感。", "weight": 1.00},
-    "ECONOMIC_BOOM": {"name": "經濟繁榮", "description": "貿易與人口成長提高，但富裕弱國更像肥羊。", "weight": 1.00},
-    "SCARCITY": {"name": "資源緊縮", "description": "糧食與金屬更重要，長期戰爭更難維持。", "weight": 0.90},
-}
+WORLD_MODES = _setting("WORLD_MODES")  # 設定集中於 game_settings.py
 
 def _world_mode_normal_state(turn_counter=0):
     return {
@@ -5917,47 +5848,47 @@ def update_rts_economy_and_jobs(data, market=None):
 # V8_2 因加入延遲評估、造訪統計及下一狀態 Action Mask，RL_VERSION 升為 5。
 RL_VERSION = 9  # 第一維由「生存資源」改為「安全態勢」；戰略 Q 需乾淨重學
 RL_ALGORITHM = "EXPECTED_SARSA_LAMBDA"
-RL_LAMBDA = 0.80
-RL_GAMMA = 0.975
-RL_BASE_EPSILON = 0.20
-RL_EPSILON_FLOOR = 0.05
-RL_EPSILON_DECAY_V6 = 0.9995
-RL_EXPLORATION_PULSE_INTERVAL = 750
-RL_EXPLORATION_PULSE_LENGTH = 30
-RL_EXPLORATION_PULSE_VALUE = 0.12
+RL_LAMBDA = _setting("RL_LAMBDA")  # 設定集中於 game_settings.py
+RL_GAMMA = _setting("RL_GAMMA")  # 設定集中於 game_settings.py
+RL_BASE_EPSILON = _setting("RL_BASE_EPSILON")  # 設定集中於 game_settings.py
+RL_EPSILON_FLOOR = _setting("RL_EPSILON_FLOOR")  # 設定集中於 game_settings.py
+RL_EPSILON_DECAY_V6 = _setting("RL_EPSILON_DECAY_V6")  # 設定集中於 game_settings.py
+RL_EXPLORATION_PULSE_INTERVAL = _setting("RL_EXPLORATION_PULSE_INTERVAL")  # 設定集中於 game_settings.py
+RL_EXPLORATION_PULSE_LENGTH = _setting("RL_EXPLORATION_PULSE_LENGTH")  # 設定集中於 game_settings.py
+RL_EXPLORATION_PULSE_VALUE = _setting("RL_EXPLORATION_PULSE_VALUE")  # 設定集中於 game_settings.py
 
 # 賽季競爭學習：屆中檢查只提供小額方向訊號，屆末冠軍則是最大終局獎勵。
 # 這些數值直接作用於戰略層 Q 值，不再除以 10。
-COMPETITION_CHECKPOINT_TURNS = 100
-SEASON_CHAMPION_Q_REWARD = 6.0
-SEASON_RUNNER_UP_Q_REWARD = 2.5
-SEASON_THIRD_Q_REWARD = 1.5
+COMPETITION_CHECKPOINT_TURNS = _setting("COMPETITION_CHECKPOINT_TURNS")  # 設定集中於 game_settings.py
+SEASON_CHAMPION_Q_REWARD = _setting("SEASON_CHAMPION_Q_REWARD")  # 設定集中於 game_settings.py
+SEASON_RUNNER_UP_Q_REWARD = _setting("SEASON_RUNNER_UP_Q_REWARD")  # 設定集中於 game_settings.py
+SEASON_THIRD_Q_REWARD = _setting("SEASON_THIRD_Q_REWARD")  # 設定集中於 game_settings.py
 
 # 屆末實體獎勵：採固定獎池，避免聯盟成員越多就無限印錢。
-SEASON_CHAMPION_GOLD_REWARD = 150 * MONEY_RATIO
-SEASON_CHAMPION_ALLIANCE_POOL = 100 * MONEY_RATIO
+SEASON_CHAMPION_GOLD_REWARD = _setting("SEASON_CHAMPION_GOLD_REWARD")  # 設定集中於 game_settings.py
+SEASON_CHAMPION_ALLIANCE_POOL = _setting("SEASON_CHAMPION_ALLIANCE_POOL")  # 設定集中於 game_settings.py
 
 # ====================================================
 # 【記憶體 / OOM 防護】
 # ====================================================
 # 每國 Q-State 上限；100 國約最多 120,000 個 State，
 # 避免長時間運行後 Q-table 無限制膨脹。
-MAX_Q_STATES_PER_AGENT = 1200
-Q_PRUNE_BATCH = 120
+MAX_Q_STATES_PER_AGENT = _setting("MAX_Q_STATES_PER_AGENT")  # 設定集中於 game_settings.py
+Q_PRUNE_BATCH = _setting("Q_PRUNE_BATCH")  # 設定集中於 game_settings.py
 
 # 過大的舊 Q-table JSON 在載入時可能瞬間耗盡 RAM。
 # 超過此大小會先自動備份，再從乾淨 Q-table 繼續學習。
-MAX_QTABLE_FILE_MB = 80
+MAX_QTABLE_FILE_MB = _setting("MAX_QTABLE_FILE_MB")  # 設定集中於 game_settings.py
 
 # Q-table 不必每 2 秒寫一次；每 10 個 Game Loop 存一次即可。
-QTABLE_SAVE_INTERVAL_TURNS = 10
+QTABLE_SAVE_INTERVAL_TURNS = _setting("QTABLE_SAVE_INTERVAL_TURNS")  # 設定集中於 game_settings.py
 
 # 探索率隨決策緩慢下降，但保留最低探索避免策略完全僵化。
-RL_EPSILON_MIN = 0.07
-RL_EPSILON_DECAY = 0.9997
+RL_EPSILON_MIN = _setting("RL_EPSILON_MIN")  # 設定集中於 game_settings.py
+RL_EPSILON_DECAY = _setting("RL_EPSILON_DECAY")  # 設定集中於 game_settings.py
 
 # Full GC 不必每 2 秒跑一次；降低長時間卡頓。
-GC_INTERVAL_TURNS = 30
+GC_INTERVAL_TURNS = _setting("GC_INTERVAL_TURNS")  # 設定集中於 game_settings.py
 
 RL_ACTIONS = {
     0: "發動戰爭",
@@ -6271,8 +6202,8 @@ def _rl_snapshot(data):
 
 
 # 國際忌憚值機制
-COALITION_FORMATION_BOUNTY = COALITION_FORMATION_BOUNTY_BASE * MONEY_RATIO
-COALITION_VICTORY_BOUNTY = COALITION_VICTORY_BOUNTY_BASE * MONEY_RATIO
+COALITION_FORMATION_BOUNTY = _setting("COALITION_FORMATION_BOUNTY")  # 設定集中於 game_settings.py
+COALITION_VICTORY_BOUNTY = _setting("COALITION_VICTORY_BOUNTY")  # 設定集中於 game_settings.py
 
 def _international_dread_rank_delta(rank):
     """依本回合世界戰力排名計算國際忌憚值變化。1~10 名為正值，11 名後為負值。"""
@@ -7856,64 +7787,7 @@ def _write_rl_monitoring(turn_counter, countries, agents, world_market, world_ba
 # ============================================================
 # 【戰國模式 V1】持續戰爭 / 攻城 / 仇恨 / 國都陷落
 # ============================================================
-WARSTATE = {
-    "ACTIVE_COUNTRIES_MIN": 10,
-    "ACTIVE_COUNTRIES_MAX": 18,
-    "WAR_DURATION_MIN": 3,
-    "WAR_DURATION_MAX": 8,
-    "SIEGE_WEIGHT": 0.20,
-    "BATTLE_WEIGHT": 0.55,
-    "RAID_WEIGHT": 0.25,
-    "CLASH_MIN": 0.25,
-    "CLASH_MAX": 0.45,
-    "FORT_SIEGE_MIN": 10,
-    "FORT_SIEGE_MAX": 20,
-    "FORT_BATTLE_MIN": 3,
-    "FORT_BATTLE_MAX": 8,
-    "CAPITAL_LOSS_STREAK": 2,
-    "CAPITAL_SOLDIER_RATIO": 0.25,
-    "CAPITAL_FORT": 20,
-    "CAPITAL_CHANCE_MIN": 0.45,
-    "CAPITAL_CHANCE_MAX": 0.65,
-    "CAPITAL_DEATH_MIN": 0.10,
-    "CAPITAL_DEATH_MAX": 0.18,
-    "HOSTILITY_ATTACK": 20,
-    "HOSTILITY_ALLY_ATTACK": 10,
-    "HOSTILITY_RAID": 15,
-    "HOSTILITY_BETRAY": 40,
-    "HOSTILITY_DECAY": 1,
-
-    # ========================================================
-    # 雙線作戰
-    # ========================================================
-    # 每個國家最多同時參加 2 場正式戰爭。
-    "MAX_ACTIVE_WARS_PER_COUNTRY": 2,
-
-    # 僅保留於不再執行的舊即時戰鬥對照程式；V9持續戰爭以實際分配計算。
-    "SECOND_FRONT_FORCE_MULTIPLIER": 0.55,
-
-    # 新開第二戰線時，第一波遠征補給更昂貴。
-    "SECOND_FRONT_INITIAL_FOOD_MULTIPLIER": 1.35,
-    "SECOND_FRONT_INITIAL_METAL_MULTIPLIER": 1.25,
-    "SECOND_FRONT_INITIAL_WOOD_MULTIPLIER": 1.00,
-
-    # 每個持續戰爭回合，第二戰線還會額外支付維持費。
-    "SECOND_FRONT_UPKEEP_FOOD_PER_SOLDIER": 0.18,
-    "SECOND_FRONT_UPKEEP_METAL_PER_SOLDIER": 0.04,
-
-    # 所有正式戰爭每回合都要維持前線補給；第二戰線另外再加上上面的額外成本。
-    "WAR_ROUND_FOOD_PER_SOLDIER": 0.10,
-    "WAR_ROUND_METAL_PER_SOLDIER": 0.02,
-
-    # 戰後短暫休戰，避免同一批國家隔一輪立刻重打。
-    "TRUCE_TURNS": 4,
-    # 到期時戰況差距超過此值才判定勝負，接近才是真和局。
-    "DEADLINE_DECISION_MARGIN": 0.10,
-    # 戰敗求和賠款（只搬動現有庫存，不創造資源）。
-    "SURRENDER_FOOD_RATE": 0.8,
-    "SURRENDER_WOOD_RATE": 0.8,
-    "SURRENDER_METAL_RATE": 0.8,
-}
+WARSTATE = _setting("WARSTATE")  # 設定集中於 game_settings.py
 
 
 def _war_add_hostility(countries, source_key, target_key, amount):
@@ -10089,9 +9963,10 @@ def thread_stat_monitor():
     global library_runtime
     library_runtime = world_library.WorldLibrary(save_path("world_library.json"), enabled=WORLD_LIBRARY_ENABLED, printer=print)
     confidence.prune_journal(save_path("alliance_confidence_history.jsonl"), turn_counter, force=True)
-    library_runtime.load(turn_counter)
-    library_runtime.observe(countries, turn_counter, count_round, season_start_turn, max(0, YEARS_PER_SEASON - (turn_counter - season_start_turn)))
-    library_runtime.save(force=True)
+    if WORLD_LIBRARY_ENABLED:
+        library_runtime.load(turn_counter)
+        library_runtime.observe(countries, turn_counter, count_round, season_start_turn, max(0, YEARS_PER_SEASON - (turn_counter - season_start_turn)))
+        library_runtime.save(force=True)
     # 主遊戲運行迴圈 (Game Loop)
     while True:
         _wait_for_simulation_permission()
