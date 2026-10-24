@@ -4439,6 +4439,7 @@ def _pick_rival_pair(alive_sorted, countries, active_wars=None):
 
 
 def _leave_alliance(country_key, countries, alliances, reason="政局變動"):
+    global ALLIANCE_NAME
     ally_name = get_country_alliance(country_key, alliances)
     if not ally_name or ally_name not in alliances:
         return False
@@ -9359,7 +9360,7 @@ def thread_stat_monitor():
     print(f"⚙️ [經濟模式] MARKET_ECONOMY_ENABLED={MARKET_ECONOMY_ENABLED}｜"
           f"{'貨幣與市場啟用' if MARKET_ECONOMY_ENABLED else '無貨幣模式：市場、交易 AI、銀行與換幣停用'}")
     """主要模擬循環線程：處理經濟、外交、戰爭、RL學習與紀錄存檔"""
-    global last_sync_time, world_stage_g, COALITION_MAX_ACTIVE
+    global last_sync_time, world_stage_g, COALITION_MAX_ACTIVE, ALLIANCE_NAME
 
     seed_text = os.environ.get("亂世演算_SEED", "").strip()
     simulation_seed = int(seed_text) if seed_text else random.SystemRandom().randint(1, 2**31 - 1)
@@ -10308,6 +10309,7 @@ def thread_stat_monitor():
             else:
                 reason = "存活盟員不足兩國，盟約自然解散（非主動退盟）"
                 print(f"📜 [聯盟解散] 第{turn_counter}年 {ally_name}：{reason}。")
+                ALLIANCE_NAME.remove(ally_name)
                 confidence.journal(save_path("alliance_confidence_history.jsonl"),dict(
                     year=turn_counter,alliance=ally_name,decision=reason,members=members,
                     survivors=live_members))
